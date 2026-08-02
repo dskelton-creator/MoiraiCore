@@ -1,0 +1,102 @@
+# 🧠 MoiraiCore — Local-First AI Orchestration Platform
+
+**MoiraiCore** is a self-hosted, local-first agent orchestration platform. It turns scattered AI models and coding agents into a single governed workspace with a Mission Control dashboard, a memory vault, a goal engine, and a strict multi-tier code pipeline.
+
+Everything runs on your machine. Your data never leaves it.
+
+> Formerly "Hagent"/"Hagent OS". **MoiraiCore** is the open-source platform core extracted and rebranded for public release.
+
+---
+
+## Highlights
+
+- **Mission Control dashboard** — a single-file SPA (`dashboard/`) that unifies agents, goals, kanban, vault, outputs, and reports.
+- **3-Tier Agent Pipeline** — a governed code-generation pipeline with a ScrumMaster (Tier 1), a provider-agnostic architect engine (Tier 2), and a local execution worker (Tier 3), gated by ScrumGate before anything merges to `src/`.
+- **Provider-agnostic Tier 2** — swap backends via env vars (OpenAI-compatible OpenRouter/DeepSeek by default, Gemini native as fallback).
+- **Memory Vault** — markdown/SQLite-FTS5 knowledge graph agents read and write.
+- **Goal Engine + Kanban** — decompose goals into tasks, route them to agents, evaluate artifacts, and synthesize reports.
+- **Full isolation** — customer projects live in their own spaces; they call MoiraiCore over HTTP and never touch core config.
+
+## Quick Start
+
+```bash
+# 1. Install dependencies
+pip install -r requirements.txt
+
+# 2. Configure a Tier 2 model backend (OpenAI-compatible via OpenRouter)
+export OPENROUTER_API_KEY=sk-or-...        # Tier 2 (architect)
+#   optional Gemini fallback:
+#   export TIER2_PROVIDER=gemini
+#   export GEMINI_API_KEY=...
+
+# 3. Start the server
+python3 scripts/server.py --port 7878
+# open http://localhost:7878
+```
+
+### Tier 2 backend configuration
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `TIER2_PROVIDER` | `openai` | `openai` (OpenAI-compatible) or `gemini` (native) |
+| `TIER2_MODEL` | `deepseek/deepseek-v4-flash-0731` | Model id |
+| `TIER2_BASE_URL` | `https://openrouter.ai/api/v1` | OpenAI-compatible endpoint |
+| `OPENROUTER_API_KEY` | — | Credential (OpenAI backend) |
+| `GEMINI_API_KEY` | — | Credential (Gemini backend) |
+| `TIER2_MAX_TOKENS` | `8192` | Output budget (keep generous for reasoning models) |
+
+## 3-Tier Pipeline
+
+```
+┌────────────────────────────────────────────────────┐
+│        MoiraiCore (Tier 1 — ScrumMaster)            │
+│   backlog · task assignment · artifact evaluation   │
+│                                                     │
+│   ┌───────────────┐   ┌────────────────┐           │
+│   │  TIER 2        │   │  TIER 3        │           │
+│   │  Architect     │   │  Local worker  │           │
+│   │  DeepSeek/Gemini│  │  Ollama        │           │
+│   │  blueprints     │   │  micro-fixes  │           │
+│   └───────┬───────┘   └───────┬────────┘           │
+│           └────────┬──────────┘                    │
+│                ┌───▼───────┐                       │
+│                │ ScrumGate │  merge queue → eval →  │
+│                │  src/     │  merge to protected    │
+│                └───────────┘  src/                 │
+└────────────────────────────────────────────────────┘
+```
+
+Direct writes to `src/` are blocked; all code goes through generate → evaluate → merge.
+
+## Repository Layout
+
+```
+MoiraiCore/
+├── scripts/          ← Server + orchestration modules (auth, goal engine, scrum, vault, workers)
+├── dashboard/        ← Mission Control SPA
+├── jarvis/           ← Conversational intelligence engine
+├── docs/             ← Design wiki
+├── tests/            ← Test suite
+├── data/             ← Architecture diagrams
+├── public/           ← Static web assets
+└── README.md
+```
+
+*Customer projects, personal workspace, private memory vault, and runtime state are intentionally **not** part of this public repository.*
+
+## Tests
+
+```bash
+cd scripts
+python3 test_gemini_truncation.py     # Tier 2 transport + truncation/continuation
+python3 test_tier_fallback.py         # Tier 2/3 failover
+python3 test_scrum_master.py          # Scrum pipeline (needs pytest)
+```
+
+## Security
+
+Report vulnerabilities privately — see [SECURITY.md](SECURITY.md). MoiraiCore uses JWT auth (24h access / 30d refresh), PBKDF2-SHA256 password hashing, and lockout protection; secrets live in `.env`/`config/auth` and are git-ignored.
+
+## License
+
+[MIT](LICENSE)

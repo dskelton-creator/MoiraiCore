@@ -1,0 +1,2 @@
+bcrypt>=5.0
+PyJWT>=2.0

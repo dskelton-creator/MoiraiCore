@@ -1,0 +1,50 @@
+# MoiraiCore — Git Ignore
+
+# macOS
+.DS_Store
+*.swp
+*.swo
+
+# Secrets / credentials (never commit)
+.env
+.env.*
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+
+# Node / JS dev deps
+node_modules/
+
+# Editor
+*.code-workspace
+.idea/
+.vscode/
+
+# Runtime databases & state (generated at runtime, never commit)
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.jsonl
+*.log
+
+# Backup / scratch
+*.backup
+*.bak
+*.bak2
+*.orig
+*.tmp
+backups/
+
+# Local runtime data (keep the versioned diagrams, ignore generated data)
+data/*.jsonl
+data/scrumgate_audit.jsonl
+
+# Runtime dirs auto-created by module imports (secrets/state live here)
+config/
