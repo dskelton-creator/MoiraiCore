@@ -4678,7 +4678,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 install_auth(Handler)
 
-class ReusableHTTPServer(http.server.HTTPServer):
+class ReusableHTTPServer(http.server.ThreadingHTTPServer):
     allow_reuse_address = True
     protocol_version = "HTTP/1.1"
 if __name__ == "__main__":

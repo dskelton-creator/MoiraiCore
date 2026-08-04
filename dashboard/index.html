@@ -6034,11 +6034,18 @@ async function jarvisSend() {
   if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '⏳'; }
 
   try {
+    // Client-side watchdog: bound the wait so the "working" indicator can
+    // never spin indefinitely. Generous (5 min) to allow long agentic runs;
+    // the server is now threaded so other requests aren't blocked meanwhile.
+    const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const watchdog = controller ? setTimeout(() => controller.abort(), 300000) : null;
     const result = await authFetch('/api/jarvis/chat', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
+      signal: controller ? controller.signal : undefined,
       body: JSON.stringify({message, session_id: jarvisSessionId, personality: jarvisPersonality}),
     });
+    if (watchdog) clearTimeout(watchdog);
 
     loadingDiv.remove();
     if (jarvisLoadTimer) { clearInterval(jarvisLoadTimer); jarvisLoadTimer = null; }
@@ -6064,7 +6071,10 @@ async function jarvisSend() {
     if (jarvisLoadTimer) { clearInterval(jarvisLoadTimer); jarvisLoadTimer = null; }
     const errDiv = document.createElement('div');
     errDiv.style.cssText = 'background:var(--bg);border:1px solid var(--red);border-radius:8px;padding:10px 14px;align-self:flex-start;max-width:80%';
-    errDiv.innerHTML = '<span style="color:var(--red)">⚠ Error:</span> ' + e.message;
+    const timedOut = e && e.name === 'AbortError';
+    errDiv.innerHTML = timedOut
+      ? '<span style="color:var(--red)">⚠ Timed out:</span> Jarvis took longer than 5 minutes to respond. The request was cancelled — please try again.'
+      : '<span style="color:var(--red)">⚠ Error:</span> ' + (e.message || 'request failed');
     chat.appendChild(errDiv);
   }
 
