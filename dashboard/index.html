@@ -5669,11 +5669,39 @@ async function projectQuickAdd() {
         if (emptyEl) emptyEl.style.display = 'none';
         msgsEl.appendChild(_chatBubble({role:'user', content:text, agent_name:'user', timestamp:new Date().toISOString(), type:'message'}));
         msgsEl.scrollTop = msgsEl.scrollHeight;
-        // Show a typing indicator
+        // Show an animated "still working" indicator
+        if (!document.getElementById('pd-chat-typing-style')) {
+          const st = document.createElement('style');
+          st.id = 'pd-chat-typing-style';
+          st.textContent = [
+            '#pd-chat-typing{display:flex;align-items:center;gap:6px;padding:8px 16px;font-size:12px;color:var(--text-dim)}',
+            '#pd-chat-typing .jl-spinner{width:12px;height:12px;border:2px solid var(--border,#3a3a4a);',
+            '  border-top-color:var(--green,#4ade80);border-radius:50%;display:inline-block;',
+            '  animation:jl-spin .8s linear infinite;flex:none}',
+            '#pd-chat-typing .jl-dot{width:5px;height:5px;border-radius:50%;background:var(--green,#4ade80);',
+            '  display:inline-block;margin:0 1px;animation:jl-bounce 1.2s infinite ease-in-out}',
+            '#pd-chat-typing .jl-dot:nth-child(2){animation-delay:.15s}',
+            '#pd-chat-typing .jl-dot:nth-child(3){animation-delay:.3s}',
+            '#pd-chat-typing .jl-tag{color:var(--green,#4ade80);font-weight:600}',
+            '#pd-chat-typing .jl-timer{font-size:11px;color:var(--text-dim)}'
+          ].join('\n');
+          document.head.appendChild(st);
+        }
         typing = document.createElement('div');
         typing.id = 'pd-chat-typing';
-        typing.style.cssText = 'text-align:left;font-size:11px;color:var(--text-dim);padding:4px 16px;animation:pulse 1.5s infinite';
-        typing.textContent = 'Jarvis is typing...';
+        typing.innerHTML =
+          '<span class="jl-spinner"></span> ' +
+          '<span class="jl-tag">Jarvis is working</span> ' +
+          '<span class="jl-dot"></span><span class="jl-dot"></span><span class="jl-dot"></span> ' +
+          '<span class="jl-timer">0s</span>';
+        // live elapsed timer; cleared when the element is removed
+        const _t0 = Date.now();
+        (function tick() {
+          if (!document.getElementById('pd-chat-typing')) return;
+          const t = document.getElementById('pd-chat-typing').querySelector('.jl-timer');
+          if (t) t.textContent = Math.floor((Date.now() - _t0) / 1000) + 's';
+          setTimeout(tick, 1000);
+        })();
         msgsEl.appendChild(typing);
         msgsEl.scrollTop = msgsEl.scrollHeight;
       }
@@ -5923,6 +5951,7 @@ function projectChat() {
 // ═══ JARVIS CHAT ═══
 let jarvisSessionId = null;
 let jarvisPersonality = "professional";
+let jarvisLoadTimer = null;
 
 async function loadJarvis() {
   // Load greeting
@@ -5963,12 +5992,42 @@ async function jarvisSend() {
   userDiv.innerHTML = '<span style="color:var(--accent);font-weight:600">You</span><br>' + message.replace(/</g,'&lt;').replace(/\n/g,'<br>');
   chat.appendChild(userDiv);
 
-  // Loading
+  // Loading — animated "still working" indicator
+  if (!document.getElementById('jarvis-loading-style')) {
+    const st = document.createElement('style');
+    st.id = 'jarvis-loading-style';
+    st.textContent = [
+      '#jarvis-loading .jl-spinner{width:14px;height:14px;border:2px solid var(--border,#3a3a4a);',
+      '  border-top-color:var(--green,#4ade80);border-radius:50%;display:inline-block;',
+      '  animation:jl-spin .8s linear infinite;vertical-align:-3px;flex:none}',
+      '@keyframes jl-spin{to{transform:rotate(360deg)}}',
+      '#jarvis-loading .jl-dot{width:6px;height:6px;border-radius:50%;background:var(--green,#4ade80);',
+      '  display:inline-block;margin:0 2px;animation:jl-bounce 1.2s infinite ease-in-out}',
+      '#jarvis-loading .jl-dot:nth-child(2){animation-delay:.15s}',
+      '#jarvis-loading .jl-dot:nth-child(3){animation-delay:.3s}',
+      '@keyframes jl-bounce{0%,60%,100%{transform:translateY(0);opacity:.35}',  ' 30%{transform:translateY(-4px);opacity:1}}',
+      '#jarvis-loading .jl-timer{font-size:11px;color:var(--text-dim,#888)}',
+      '#jarvis-loading .jl-tag{font-weight:600}'
+    ].join('\n');
+    document.head.appendChild(st);
+  }
+
   const loadingDiv = document.createElement('div');
   loadingDiv.id = 'jarvis-loading';
   loadingDiv.style.cssText = 'background:var(--bg);border:1px solid var(--border);border-radius:8px 8px 8px 0;padding:10px 14px;align-self:flex-start;max-width:80%';
-  loadingDiv.innerHTML = '<span style="color:var(--green,#4ade80);font-weight:600">⏳ Thinking…</span>';
+  loadingDiv.innerHTML =
+    '<span class="jl-spinner"></span> ' +
+    '<span class="jl-tag" style="color:var(--green,#4ade80)">Jarvis is working</span> ' +
+    '<span class="jl-dot"></span><span class="jl-dot"></span><span class="jl-dot"></span> ' +
+    '<span class="jl-timer">0s</span>';
   chat.appendChild(loadingDiv);
+  const _t0 = Date.now();
+  jarvisLoadTimer = setInterval(() => {
+    const el = document.getElementById('jarvis-loading');
+    if (!el) { clearInterval(jarvisLoadTimer); return; }
+    const t = el.querySelector('.jl-timer');
+    if (t) t.textContent = Math.floor((Date.now() - _t0) / 1000) + 's';
+  }, 1000);
   chat.scrollTop = chat.scrollHeight;
 
   input.value = '';
@@ -5982,6 +6041,7 @@ async function jarvisSend() {
     });
 
     loadingDiv.remove();
+    if (jarvisLoadTimer) { clearInterval(jarvisLoadTimer); jarvisLoadTimer = null; }
 
     if (result && result.session_id) {
       jarvisSessionId = result.session_id;
@@ -6001,6 +6061,7 @@ async function jarvisSend() {
     chat.appendChild(respDiv);
   } catch(e) {
     loadingDiv.remove();
+    if (jarvisLoadTimer) { clearInterval(jarvisLoadTimer); jarvisLoadTimer = null; }
     const errDiv = document.createElement('div');
     errDiv.style.cssText = 'background:var(--bg);border:1px solid var(--red);border-radius:8px;padding:10px 14px;align-self:flex-start;max-width:80%';
     errDiv.innerHTML = '<span style="color:var(--red)">⚠ Error:</span> ' + e.message;
