@@ -66,7 +66,6 @@ def install_auth(handler_cls):
             "/api/audit/events",  # Audit events read (public)
             "/api/reports/",
             "/api/backup/status",
-            "/api/trading/",
             "/api/lnb/",
             "/reports/",
             "/docs/",

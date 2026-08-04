@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MoiraiCore — AI that writes code. MoiraiCore that ships it.</title>
+<style>
+:root{
+  --bg:#0a0a0f; --surface:#12121a; --surface2:#1a1a26; --border:#2a2a3a;
+  --text:#e4e4ef; --text-dim:#8888a0; --accent:#7c5bf5; --accent2:#5b9bf5;
+  --green:#4ade80; --yellow:#fbbf24; --red:#f87171; --radius:14px;
+  --mono:'SF Mono','Fira Code',Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',Roboto,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+a{color:var(--accent2);text-decoration:none}
+code,pre{font-family:var(--mono)}
+
+/* ── Nav ── */
+nav{position:sticky;top:0;z-index:50;background:rgba(10,10,15,.85);backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
+.nav-inner{display:flex;align-items:center;justify-content:space-between;height:64px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.2px}
+.brand .dot{width:12px;height:12px;border-radius:3px;background:var(--accent);box-shadow:0 0 0 4px rgba(124,91,245,.22)}
+.nav-links{display:flex;gap:26px;font-size:14px;color:var(--text-dim)}
+.nav-links a{color:var(--text-dim)}
+.nav-links a:hover{color:var(--text)}
+.btn{display:inline-block;padding:10px 18px;border-radius:10px;font-weight:600;font-size:14px;border:1px solid var(--border);color:var(--text);background:var(--surface2)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-primary:hover{background:#8b6dff}
+
+/* ── Hero ── */
+.hero{padding:104px 0 72px;border-bottom:1px solid var(--border)}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12.5px;color:var(--green);letter-spacing:.5px;border:1px solid rgba(74,222,128,.3);padding:6px 14px;border-radius:999px;margin-bottom:28px}
+.hero h1{font-size:clamp(38px,6vw,68px);line-height:1.05;letter-spacing:-.02em;font-weight:800;max-width:850px}
+.hero h1 .muted{color:var(--text-dim)}
+.hero h1 .accent{color:var(--accent2)}
+.hero .lede{font-size:clamp(17px,2vw,21px);color:var(--text-dim);max-width:680px;margin-top:24px}
+.hero .cta-row{display:flex;gap:14px;margin-top:36px;flex-wrap:wrap}
+.hero .terminal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-top:56px;overflow:hidden}
+.terminal .bar{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:12px;color:var(--text-dim)}
+.terminal .bar .g{width:10px;height:10px;border-radius:50%}
+.terminal pre{padding:20px;font-size:13.5px;overflow-x:auto;color:#cfcfe0;line-height:1.7}
+.terminal .c{color:var(--text-dim)}
+.terminal .gtext{color:var(--green)}
+.terminal .vt{color:var(--accent2)}
+.terminal .yel{color:var(--yellow)}
+.terminal .red{color:var(--red)}
+</style>
+</head>
+<body>
+<nav><div class="nav-inner wrap">
+  <div class="brand"><span class="dot"></span>MoiraiCore</div>
+  <div class="nav-links">
+    <a href="#hook">The Gate</a>
+    <a href="#pipeline">Pipeline</a>
+    <a href="#why">Why</a>
+    <a href="#providers">Providers</a>
+    <a href="#cta">Get Started</a>
+  </div>
+</div></nav>
+
+<section class="hero">
+  <div class="wrap">
+    <span class="eyebrow">● Self-hosted · Multi-model · Open source (MIT)</span>
+    <h1>AI writes the code.<br><span class="muted">MoiraiCore</span> <span class="accent">ships</span> it.</h1>
+    <p class="lede">Every AI agent wants to write straight into your <code>src/</code>. MoiraiCore sits in front of them with a governed three-tier pipeline — so every change is generated, evaluated, and merged behind a review gate. No bypass, no unreviewed merges, no black-box commits.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="#cta">Get started in 5 minutes</a>
+      <a class="btn" href="https://github.com" target="_blank" rel="noopener">★ Star on GitHub</a>
+    </div>
+    <div class="terminal">
+      <div class="bar"><span class="g" style="background:#f87171"></span><span class="g" style="background:#fbbf24"></span><span class="g" style="background:#4ade80"></span>&nbsp; moiraicore scrum run</div>
+<pre><span class="c">$</span> moiraicore run "Add auth middleware to the API"
+<span class="vt">▸ Tier 1</span> <span class="c">ScrumMaster</span>  decomposed goal → backlog (4 tasks)
+<span class="vt">▸ Tier 2</span> <span class="c">Architect</span>   generated implementation plan
+<span class="vt">▸ Tier 2</span> <span class="c">Architect</span>   generated src/middleware/auth.py
+<span class="yel">▸ ScrumGate</span> <span class="c">reviewing</span>  syntax ✓  security ✓  structure ✓
+<span class="gtext">✔ Merged to src/</span>  <span class="c">— task #2 approved, 3 remaining</span>
+<span class="c">$</span> <span class="gtext">_</span></pre>
+    </div>
+  </div>
+</section>
+
+<section id="hook" style="padding:96px 0;border-bottom:1px solid var(--border)">
+  <div class="wrap">
+    <div style="max-width:760px">
+      <h2 style="font-size:clamp(28px,4vw,44px);font-weight:800;letter-spacing:-.02em;line-height:1.12">The difference is the <span style="color:var(--green)">gate</span>.</h2>
+      <p style="font-size:18px;color:var(--text-dim);margin-top:20px">Standalone agents are trusted to write wherever they like. MoiraiCore treats the model as a <em>capable but untrusted</em> contributor — and routes every change through a review gate the way a release engineer would.</p>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:48px">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px">
+        <div style="font-family:var(--mono);font-size:12px;color:var(--red);margin-bottom:10px">WITHOUT A GATE</div>
+        <div style="font-size:15px;color:var(--text-dim)">The agent writes to <code>src/</code> directly. You review after the fact — if at all. A bot can commit broken, insecure, or unwanted code before anyone sees it.</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--accent);border-radius:var(--radius);padding:24px;box-shadow:0 0 0 3px rgba(124,91,245,.15)">
+        <div style="font-family:var(--mono);font-size:12px;color:var(--accent2);margin-bottom:10px">WITH MOIRAICORE</div>
+        <div style="font-size:15px;color:var(--text)">Every task is decomposed → generated by a capable model → <span style="color:var(--green)">evaluated (syntax, security, structure)</span> → merged only on approval. Direct writes to <code>src/</code> are blocked.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="pipeline" style="padding:96px 0">
+  <div class="wrap">
+    <div style="max-width:760px">
+      <h2 style="font-size:clamp(28px,4vw,44px);font-weight:800;letter-spacing:-.02em;line-height:1.12">A three-tier pipeline with a release engineer built in.</h2>
+      <p style="font-size:18px;color:var(--text-dim);margin-top:20px">Not one all-powerful agent. A governed team where each tier does one job well and nothing reaches your codebase unexamined.</p>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:48px">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px">
+        <div style="font-family:var(--mono);font-size:12px;color:var(--accent2);margin-bottom:8px">TIER 1 · SCRUMMASTER</div>
+        <h3 style="font-size:19px;font-weight:700;margin-bottom:8px">Plans the work</h3>
+        <p style="font-size:14.5px;color:var(--text-dim)">Decomposes goals into a dependency-aware backlog. Routes each task to the right tier. Owns assignment and evaluation — the model never decides what to build next.</p>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px">
+        <div style="font-family:var(--mono);font-size:12px;color:var(--accent2);margin-bottom:8px">TIER 2 · ARCHITECT</div>
+        <h3 style="font-size:19px;font-weight:700;margin-bottom:8px">Designs &amp; generates</h3>
+        <p style="font-size:14.5px;color:var(--text-dim)">Produces blueprints and code with a provider-agnostic backend — your choice of DeepSeek, Gemini, OpenAI-compatible, or local models.</p>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px">
+        <div style="font-family:var(--mono);font-size:12px;color:var(--accent2);margin-bottom:8px">TIER 3 · BUILDER</div>
+        <h3 style="font-size:19px;font-weight:700;margin-bottom:8px">Executes locally</h3>
+        <p style="font-size:14.5px;color:var(--text-dim)">Handles tight, single-file micro-fixes on your own machine via Ollama — fast, private, and free, with loop detection and iteration caps.</p>
+      </div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-top:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <span style="font-family:var(--mono);font-size:12px;color:var(--yellow);white-space:nowrap">SCRUMGATE</span>
+      <span style="color:var(--text-dim);font-size:14px">Everything flows here first: merge queue → evaluate (syntax + security) → <span style="color:var(--green)">merge to protected <code>src/</code></span>.</span>
+    </div>
+  </div>
+</section>
+
+
+<section id="why" style="padding:96px 0;border-top:1px solid var(--border)">
+  <div class="wrap">
+    <div style="max-width:760px">
+      <h2 style="font-size:clamp(28px,4vw,44px);font-weight:800;letter-spacing:-.02em;line-height:1.12">Runs where you do. <span style="color:var(--text-dim)">Owns nothing you didn't share.</span></h2>
+      <p style="font-size:18px;color:var(--text-dim);margin-top:20px">Local-first by design. Your code, your vault, your conversations stay on your machine — while the model backends stay swappable.</p>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-top:48px">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px">
+        <h3 style="font-size:19px;font-weight:700;margin-bottom:8px">Local-first, by default</h3>
+        <p style="font-size:14.5px;color:var(--text-dim)">Everything runs on your machine. Your memory vault is local markdown + SQLite. No cloud account required for the core platform.</p>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px">
+        <h3 style="font-size:19px;font-weight:700;margin-bottom:8px">Private by design</h3>
+        <p style="font-size:14.5px;color:var(--text-dim)">The Tier 3 micro-fix worker runs on local Ollama — code fixes never leave the machine. Send anything sensitive only where you choose.</p>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px">
+        <h3 style="font-size:19px;font-weight:700;margin-bottom:8px">Open source (MIT)</h3>
+        <p style="font-size:14.5px;color:var(--text-dim)">Read the code, audit the gate, fork it. The governance model you depend on should never be a black box.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<section id="providers" style="padding:96px 0;border-top:1px solid var(--border)">
+  <div class="wrap">
+    <div style="max-width:760px">
+      <h2 style="font-size:clamp(28px,4vw,44px);font-weight:800;letter-spacing:-.02em;line-height:1.12">Bring your own model. <span style="color:var(--text-dim)">Never locked to one vendor.</span></h2>
+      <p style="font-size:18px;color:var(--text-dim);margin-top:20px">The architect tier reads its backend from environment variables. Swap providers without touching the pipeline.</p>
+    </div>
+    <div style="font-family:var(--mono);font-size:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-top:40px;overflow-x:auto">
+<span class="c">#</span> TIER2_PROVIDER=openai → OpenAI-compatible (OpenRouter / DeepSeek)<br>
+<span class="c">#</span> TIER2_PROVIDER=gemini → Gemini native API<br>
+<br>
+<span class="c">$</span> <span class="vt">export</span> TIER2_PROVIDER=openai<br>
+<span class="c">$</span> <span class="vt">export</span> TIER2_MODEL=deepseek/deepseek-v4-flash-0731<br>
+<span class="c">$</span> <span class="vt">export</span> OPENROUTER_API_KEY=sk-or-...<br>
+<span class="c">$</span> moiraicore server --port 7878
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:24px">
+      <span style="font-family:var(--mono);font-size:12px;color:var(--text-dim);border:1px solid var(--border);padding:6px 14px;border-radius:999px">DeepSeek</span>
+      <span style="font-family:var(--mono);font-size:12px;color:var(--text-dim);border:1px solid var(--border);padding:6px 14px;border-radius:999px">Gemini</span>
+      <span style="font-family:var(--mono);font-size:12px;color:var(--text-dim);border:1px solid var(--border);padding:6px 14px;border-radius:999px">OpenAI-compatible</span>
+      <span style="font-family:var(--mono);font-size:12px;color:var(--text-dim);border:1px solid var(--border);padding:6px 14px;border-radius:999px">Local Ollama</span>
+    </div>
+  </div>
+</section>
+
+
+<section id="cta" style="padding:120px 0;border-top:1px solid var(--border)" align="center">
+  <div class="wrap">
+    <h2 style="font-size:clamp(30px,5vw,52px);font-weight:800;letter-spacing:-.02em;line-height:1.08">Stop trusting. Start shipping.</h2>
+    <p style="font-size:19px;color:var(--text-dim);max-width:620px;margin:20px auto 0">Self-host MoiraiCore, bring your favorite models, and let a real gate own the merge.</p>
+    <div class="cta-row" style="justify-content:center;margin-top:36px">
+      <a class="btn btn-primary" style="font-size:16px;padding:14px 26px" href="https://github.com" target="_blank" rel="noopener">★ Star on GitHub</a>
+      <a class="btn" style="font-size:16px;padding:14px 26px" href="#">Read the docs</a>
+    </div>
+  </div>
+</section>
+<footer style="border-top:1px solid var(--border);padding:40px 0 60px">
+  <div class="wrap" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">
+    <div class="brand"><span class="dot"></span>MoiraiCore</div>
+    <div style="font-size:13px;color:var(--text-dim);font-family:var(--mono)">local-first · multi-model · MIT</div>
+  </div>
+</footer>
+</body>
+</html>

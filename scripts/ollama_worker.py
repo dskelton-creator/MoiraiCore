@@ -22,7 +22,7 @@ class OllamaConfig:
     """Configuration for an Ollama Tier 3 worker."""
     provider: str = "openai_compatible"
     base_url: str = "http://localhost:11434/v1"
-    model_name: str = "hf.co/deepreinforce-ai/Ornith-1.0-9B-GGUF:Q4_K_M"
+    model_name: str = "qwen2.5-coder:14b"
     max_retries: int = 5
     per_iteration_timeout: int = 60  # seconds (reduced from 120)
     temperature: float = 0.1  # Low temp for deterministic code fixes

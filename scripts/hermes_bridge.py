@@ -145,10 +145,7 @@ def get_toolsets_for_agent(agent_key: str) -> str:
         "developer": "terminal,file,code_execution,session_memory,clarify",  # Coding focused
         "antigravity": "terminal,file,code_execution,session_memory,clarify",  # Advanced coding
         "codex": "terminal,file,code_execution,session_memory,clarify",  # Code generation
-        "seo": "web,search,session_memory,clarify",  # SEO research
-        "threat": "web,search,terminal,file,session_memory,clarify",  # Security research
         "pm": "file,session_memory,clarify,delegation",  # Project management
-        "trading": "web,search,session_memory,clarify",  # Financial research
     }
     
     # Return the toolset for the agent, or default to hermes if not found
@@ -343,7 +340,7 @@ def cmd_ask(args) -> dict:
 
             ollama_config = OllamaConfig(
                 base_url=worker_config.get("base_url", "http://localhost:11434/v1"),
-                model_name=worker_config.get("model_name", "hf.co/deepreinforce-ai/Ornith-1.0-9B-GGUF:Q4_K_M"),
+                model_name=worker_config.get("model_name", "qwen2.5-coder:14b"),
                 max_retries=worker_config.get("max_retries", 5),
                 per_iteration_timeout=worker_config.get("per_iteration_timeout", 60),
             )

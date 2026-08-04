@@ -84,10 +84,8 @@ VAULT = AGENT_OS_ROOT / "memory-vault"
 TASKS_FILE = AGENT_OS_ROOT / "config" / "tasks.json"
 KANBAN_FILE = AGENT_OS_ROOT / "config" / "kanban.json"
 
-SEO_SCRIPT = AGENT_OS_ROOT / "scripts" / "seo_toolkit.py"
 HERMES_BRIDGE = AGENT_OS_ROOT / "scripts" / "hermes_bridge.py"
 AGENT_REGISTRY_SCRIPT = AGENT_OS_ROOT / "scripts" / "agent_registry.py"
-THREAT_SCRIPT = AGENT_OS_ROOT / "scripts" / "threat_mod_toolkit.py"
 
 def _run_hermes_bridge(args: list[str], timeout: int = 300) -> dict:
     """Run the Hermes bridge and return parsed JSON result."""
@@ -425,22 +423,6 @@ def scan_vault():
     except Exception as e:
         return {"nodes": [], "links": [], "error": str(e)}
 
-_seo_analyzer = None
-def _get_seo():
-    global _seo_analyzer
-    if _seo_analyzer is None:
-        from seo_toolkit import SEOAnalyzer
-        _seo_analyzer = SEOAnalyzer()
-    return _seo_analyzer
-
-_threat_engine = None
-def _get_threat():
-    global _threat_engine
-    if _threat_engine is None:
-        from threat_mod_toolkit import ThreatRiskEngine
-        _threat_engine = ThreatRiskEngine()
-    return _threat_engine
-
 _wa_module = None
 def _get_workspace_analyzer():
     """Lazy-load workspace_analyzer module (cached)."""
@@ -482,7 +464,7 @@ def _generate_report_html(report_type, title, content, task_id="", goal_id="",
     status_color = {"completed": "#4ade80", "partial": "#fbbf24", "failed": "#f87171"}.get(status_val, "#8888a0")
     status_icon = {"completed": "✅", "partial": "⚠️", "failed": "❌"}.get(status_val, "ℹ️")
     duration_str = f"{duration_ms/1000:.1f}s" if duration_ms else "—"
-    agent_icons = {"hermes":"🦉","developer":"💻","researcher":"🔍","writer":"✍️","seo":"🔍","threat":"🛡️","pm":"🎯","any":"🤖"}
+    agent_icons = {"hermes":"🦉","developer":"💻","researcher":"🔍","writer":"✍️","pm":"🎯","any":"🤖"}
     agent_icon = agent_icons.get(agent, "🤖")
     # Build stage results HTML
     stages_html = ""
@@ -692,7 +674,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         break
                 if agent == "unknown":
                     for p_part in stem.split("-"):
-                        if p_part in ("hermes", "researcher", "writer", "developer", "antigravity", "codex", "pm", "seo", "threat"):
+                        if p_part in ("hermes", "researcher", "writer", "developer", "antigravity", "codex", "pm"):
                             agent = p_part
                             break
                 outputs.append({
@@ -744,10 +726,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         # 5. Agent vault outputs
         _agent_vault_dirs = [
             VAULT / "research" / "reports",
-            VAULT / "seo-reports",
             VAULT / "agents" / "researcher" / "findings",
             VAULT / "agents" / "writer" / "drafts",
-            VAULT / "agents" / "seo" / "reports",
         ]
         for subdir in _agent_vault_dirs:
             if subdir.exists():
@@ -1894,55 +1874,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
             _json(self, result)
             return
 
-        # ── TRADING AGENT (GET) ──
-        if p.path == "/api/trading/status":
-            try:
-                sys.path.insert(0, str(AGENT_OS_ROOT / "scripts"))
-                from trading_agent import load_config, load_state
-                config = load_config()
-                state = load_state()
-                result = {
-                    "ok": True,
-                    "paper_trading": config.get("paper_trading", True),
-                    "account_type": config.get("account_type", "DEMO"),
-                    "account_balance": state.get("account_balance", 0),
-                    "daily_pnl": state.get("daily_pnl", 0),
-                    "total_trades": state.get("total_trades", 0),
-                    "winning_trades": state.get("winning_trades", 0),
-                    "losing_trades": state.get("losing_trades", 0),
-                    "open_positions": len(state.get("open_positions", [])),
-                    "markets": config.get("markets", []),
-                }
-            except Exception as e:
-                result = {"ok": False, "error": str(e)}
-            _json(self, result)
-            return
-
-        if p.path == "/api/trading/signals":
-            try:
-                sys.path.insert(0, str(AGENT_OS_ROOT / "scripts"))
-                from trading_agent import load_config, load_state, run_trading_cycle
-                config = load_config()
-                state = load_state()
-                results = run_trading_cycle(config, state)
-                result = {"ok": True, **results}
-            except Exception as e:
-                result = {"ok": False, "error": str(e)}
-            _json(self, result)
-            return
-
-        if p.path == "/api/trading/report":
-            try:
-                sys.path.insert(0, str(AGENT_OS_ROOT / "scripts"))
-                from trading_agent import load_state, generate_report
-                state = load_state()
-                report = generate_report(state, {"signals": [], "trades": [], "errors": []})
-                result = {"ok": True, "report": report}
-            except Exception as e:
-                result = {"ok": False, "error": str(e)}
-            _json(self, result)
-            return
-
         # ── WORKFLOW ENGINE (GET) ──
         if p.path == "/api/workflows":
             WORKFLOWS_DIR = AGENT_OS_ROOT / "config" / "workflows"
@@ -2324,7 +2255,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     if agent == "unknown":
                         # Fallback: check if any known agent name appears in the filename
                         for p_part in parts:
-                            if p_part in ("hermes", "researcher", "writer", "developer", "antigravity", "codex", "pm", "seo", "threat"):
+                            if p_part in ("hermes", "researcher", "writer", "developer", "antigravity", "codex", "pm"):
                                 agent = p_part
                                 break
                     outputs.append({
@@ -2390,13 +2321,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         "icon": "📅",
                     })
 
-            # 5. Agent output files from vault (research/reports, seo-reports, etc.)
+            # 5. Agent output files from vault (research/reports, etc.)
             _agent_vault_dirs = [
                 VAULT / "research" / "reports",
-                VAULT / "seo-reports",
                 VAULT / "agents" / "researcher" / "findings",
                 VAULT / "agents" / "writer" / "drafts",
-                VAULT / "agents" / "seo" / "reports",
             ]
             for subdir in _agent_vault_dirs:
                 if subdir.exists():
@@ -2991,7 +2920,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
             ollama_config = OllamaConfig(
                 base_url=worker_config.get("base_url", "http://localhost:11434/v1"),
-                model_name=worker_config.get("model_name", "hf.co/deepreinforce-ai/Ornith-1.0-9B-GGUF:Q4_K_M"),
+                model_name=worker_config.get("model_name", "qwen2.5-coder:14b"),
                 max_retries=worker_config.get("max_retries", 5),
                 per_iteration_timeout=worker_config.get("per_iteration_timeout", 60),
             )
@@ -3481,14 +3410,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
             else:
                 self.send_error(404, "File not found")
             return
-
-        # ── SEO TOOLKIT (POST) ──
-        if p.path.startswith("/api/seo/"):
-            return self._handle_seo_post(p.path[9:], body_raw=False)
-
-        # ── THREAT MODELLING & RISK (POST) ──
-        if p.path.startswith("/api/threat/"):
-            return self._handle_threat_post(p.path[12:], body_raw=False)
 
         if p.path == "/api/tasks/create":
             length = int(self.headers.get("Content-Length", 0))
@@ -4737,14 +4658,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self._send_json(500, {"error": "disconnect_failed", "message": str(e)})
             return
 
-        # ── SEO TOOLKIT ──
-        if p.path.startswith("/api/seo/"):
-            return self._handle_seo_post(p.path[9:], body_raw=False)
-
-        # ── THREAT MODELLING & RISK (NIST 800-30/37/53) ──
-        if p.path.startswith("/api/threat/"):
-            return self._handle_threat_post(p.path[12:], body_raw=False)
-
         self.send_error(405)
 
     def do_DELETE(self):
@@ -4762,238 +4675,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_response(204)
         self._cors_headers()
         self.end_headers()
-
-    def _handle_threat_post(self, action, body_raw=False):
-        """Handle NIST threat modelling & risk assessment requests."""
-        p = urlparse(self.path)
-        length = int(self.headers.get("Content-Length", 0))
-        try:
-            body = json.loads(self.rfile.read(length)) if length > 0 else {}
-        except Exception:
-            self.send_error(400, "Invalid JSON")
-            return
-
-        try:
-            engine = _get_threat()
-        except Exception as e:
-            _json(self, {"error": f"Threat engine not available: {e}"})
-            return
-
-        try:
-            if action == "stride":
-                result = engine.stride_model(
-                    asset_name=body.get("asset_name", "Unnamed Asset"),
-                    asset_type=body.get("asset_type", "System"),
-                    description=body.get("description", ""),
-                    data_flows=body.get("data_flows", []),
-                    trust_boundaries=body.get("trust_boundaries", []),
-                    entry_points=body.get("entry_points", []),
-                    assets=body.get("assets", []),
-                )
-
-            elif action == "risk":
-                result = engine.risk_assess(
-                    threats=body.get("threats", []),
-                    system_name=body.get("system_name", ""),
-                    system_boundary=body.get("system_boundary", ""),
-                    organisation=body.get("organisation", ""),
-                )
-
-            elif action == "controls":
-                result = engine.control_mapper(
-                    threats=body.get("threats", []),
-                    risk_level=body.get("risk_level", "Moderate"),
-                    system_impact=body.get("system_impact", "Moderate"),
-                )
-
-            elif action == "residual":
-                result = engine.residual_risk(
-                    risk_register=body.get("risk_register", []),
-                    mitigations=body.get("mitigations", []),
-                )
-
-            elif action == "bowtie":
-                result = engine.bowtie_analysis(
-                    threat_name=body.get("threat_name", ""),
-                    asset=body.get("asset", ""),
-                    consequences=body.get("consequences", []),
-                    preventive_barriers=body.get("preventive_barriers", []),
-                    recovery_measures=body.get("recovery_measures", []),
-                    escalation_factors=body.get("escalation_factors", []),
-                )
-
-            elif action == "report":
-                # Accepts a pre-computed risk assessment dict
-                assessment = body.get("assessment", {})
-                if not assessment:
-                    # Auto-generate from threats list
-                    assessment = engine.risk_assess(
-                        threats=body.get("threats", []),
-                        system_name=body.get("system_name", ""),
-                        system_boundary=body.get("system_boundary", ""),
-                        organisation=body.get("organisation", ""),
-                    )
-                result = engine.executive_report(
-                    assessment=assessment,
-                    organisation=body.get("organisation", ""),
-                    scope=body.get("scope", ""),
-                    assessor=body.get("assessor", "MoiraiCore Threat Engine"),
-                    classification=body.get("classification", "Confidential"),
-                )
-
-            elif action == "rmf":
-                result = engine.rmf_tracker(
-                    system_name=body.get("system_name", ""),
-                    current_step=body.get("current_step", "Categorize"),
-                    steps=body.get("steps"),
-                )
-
-            elif action == "catalogue":
-                result = engine.threat_catalogue(
-                    category=body.get("category"),
-                    source_type=body.get("source_type"),
-                )
-
-            elif action == "auto":
-                result = engine.auto_assess(
-                    description=body.get("description", ""),
-                    system_name=body.get("system_name", ""),
-                    assessor=body.get("assessor", "MoiraiCore Threat Engine"),
-                )
-
-            else:
-                _json(self, {"error": f"Unknown threat action: {action}. "
-                                   f"Valid: stride, risk, controls, residual, bowtie, report, rmf, catalogue, auto"})
-                return
-
-            _json(self, result)
-
-        except Exception as e:
-            _json(self, {"error": str(e), "action": action})
-
-    def _handle_seo_post(self, action, body_raw=False):
-        """Handle SEO toolkit POST requests. SSRF-safe: blocks internal/private IPs."""
-        import ipaddress
-        import socket
-        from urllib.parse import urlparse as _urlparse
-
-        def _is_safe_url(url_str):
-            """Block private, loopback, and internal IPs to prevent SSRF."""
-            try:
-                parsed = _urlparse(url_str)
-                if parsed.scheme not in ('http', 'https'):
-                    return False
-                hostname = parsed.hostname
-                if not hostname:
-                    return False
-                # Block localhost and common internal hostnames
-                if hostname.lower() in ('localhost', '127.0.0.1', '0.0.0.0', '::1'):
-                    return False
-                # Resolve and check if private
-                try:
-                    infos = socket.getaddrinfo(hostname, None)
-                    for info in infos:
-                        addr = ipaddress.ip_address(info[4][0])
-                        if addr.is_private or addr.is_loopback or addr.is_reserved or addr.is_link_local:
-                            return False
-                except (socket.gaierror, ValueError, OSError):
-                    return False
-                return True
-            except Exception:
-                return False
-
-        def _clamp(val, lo, hi):
-            return max(lo, min(int(val), hi))
-
-        p = urlparse(self.path)
-        length = int(self.headers.get("Content-Length", 0))
-        try:
-            body = json.loads(self.rfile.read(length)) if length > 0 else {}
-        except Exception:
-            self.send_error(400, "Invalid JSON")
-            return
-
-        try:
-            seo = _get_seo()
-        except Exception as e:
-            _json(self, {"error": f"SEO toolkit not available: {e}"})
-            return
-
-        try:
-            if action == "audit":
-                url = body.get("url", "").strip()
-                if not url or not _is_safe_url(url):
-                    self.send_error(400, "Invalid or unsafe url")
-                    return
-                result = seo.full_audit(url)
-
-            elif action == "content":
-                url = body.get("url", "").strip()
-                keyword = body.get("keyword", "").strip()
-                if not url or not _is_safe_url(url):
-                    self.send_error(400, "Invalid or unsafe url")
-                    return
-                result = seo.content_analyze(url, keyword)
-
-            elif action == "keywords":
-                text = body.get("text", "").strip()
-                top_n = _clamp(body.get("top_n", 20), 1, 50)
-                if not text:
-                    self.send_error(400, "Missing text")
-                    return
-                result = seo.keyword_research(text, top_n)
-
-            elif action == "crawl":
-                url = body.get("url", "").strip()
-                max_pages = _clamp(body.get("max_pages", 20), 1, 100)
-                if not url or not _is_safe_url(url):
-                    self.send_error(400, "Invalid or unsafe url")
-                    return
-                result = seo.site_crawl(url, max_pages)
-
-            elif action == "compare":
-                your_url = body.get("your_url", "").strip()
-                competitors = [c.strip() for c in body.get("competitors", []) if c.strip()]
-                if not your_url or not competitors:
-                    self.send_error(400, "Missing your_url or competitors")
-                    return
-                if not _is_safe_url(your_url):
-                    self.send_error(400, "Invalid or unsafe your_url")
-                    return
-                for c_url in competitors:
-                    if not _is_safe_url(c_url):
-                        self.send_error(400, f"Unsafe competitor url: {c_url[:60]}")
-                        return
-                result = seo.competitor_compare(your_url, *competitors)
-
-            elif action == "schema":
-                schema_type = body.get("type", "").strip()
-                schema_data = body.get("data", {})
-                if not schema_type or schema_type not in ("article","product","faq","howto","localbusiness","person","organization","breadcrumb","website","video"):
-                    self.send_error(400, "Invalid schema type")
-                    return
-                result = seo.schema_generate(schema_type, schema_data)
-
-            elif action == "backlinks":
-                url = body.get("url", "").strip()
-                if not url or not _is_safe_url(url):
-                    self.send_error(400, "Invalid or unsafe url")
-                    return
-                result = seo.backlink_check(url)
-
-            else:
-                self.send_error(404, f"Unknown SEO action: {action}")
-                return
-
-            _json(self, result)
-            return
-
-        except Exception as e:
-            _json(self, {"error": str(e), "action": action})
-            return
-
-        # 404 fallback
-        self.send_error(404, f"Unknown endpoint: {p.path}")
 
 install_auth(Handler)
 

@@ -23,7 +23,7 @@ class TestAgentRegistry:
 
     def test_list_agents_returns_all(self):
         agents = self.reg.list_agents(status_filter="all")
-        assert len(agents) >= 8
+        assert len(agents) >= 6
 
     def test_list_active_agents(self):
         agents = self.reg.list_agents(status_filter="active")
@@ -54,17 +54,17 @@ class TestAgentRegistry:
         )
         assert key == "researcher"
 
-    def test_find_agent_for_seo_task(self):
-        key, confidence, triggers = self.reg.find_agent_for_task(
+    def test_find_agent_retired_specialists_via_router(self):
+        # The SEO / Threat specialist agents were removed from the curated
+        # platform; these intents must not route to a retired agent key.
+        key, _, _ = self.reg.find_agent_for_task(
             "Perform an SEO audit of my website"
         )
-        assert key == "seo"
-
-    def test_find_agent_for_threat_task(self):
-        key, confidence, triggers = self.reg.find_agent_for_task(
+        assert key != "seo"
+        key, _, _ = self.reg.find_agent_for_task(
             "Conduct a STRIDE threat model"
         )
-        assert key == "threat"
+        assert key != "threat"
 
     def test_find_agent_for_writer_task(self):
         key, confidence, triggers = self.reg.find_agent_for_task(
