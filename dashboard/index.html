@@ -661,154 +661,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-
     </div>
   </div>
 
-  <!-- LOOP MONITOR -->
-  <div class="content view" id="view-live">
-    <div class="live-header">
-      <h2><span class="live-pulse" id="live-pulse"></span> Live Activity</h2>
-      <div class="live-controls">
-        <button class="btn small" id="live-refresh-btn" onclick="loadLive()"><span class="icon">↻</span> Refresh</button>
-        <button class="btn small primary" id="live-auto-btn" onclick="toggleLiveAuto()">⏸ Auto</button>
-        <span class="live-autodot" id="live-autodot"><span class="dot"></span> live</span>
-      </div>
-    </div>
-
-    <div class="live-stat-row" id="live-stats">
-      <div class="live-stat"><div class="label">Status</div><div class="value green" id="live-status">—</div></div>
-      <div class="live-stat"><div class="label">Active Now</div><div class="value accent" id="live-active">—</div></div>
-      <div class="live-stat"><div class="label">Tasks Running</div><div class="value yellow" id="live-tasks">—</div></div>
-      <div class="live-stat"><div class="label">Last Event</div><div class="value" id="live-last" style="font-size:15px;padding-top:6px">—</div></div>
-    </div>
-
-    <div class="live-grid">
-      <div class="live-panel">
-        <h3>🚀 Currently Running <span class="more" onclick="loadLive()">↻ Refresh</span></h3>
-        <div id="live-running"><div class="live-loading">Loading…</div></div>
-      </div>
-      <div class="live-panel">
-        <h3>📜 Activity Feed <span class="more" onclick="loadLive()">↻ Refresh</span></h3>
-        <div class="live-feed" id="live-feed"><div class="live-loading">Loading…</div></div>
-      </div>
-    </div>
-  </div>
-
-  <div class="content view" id="view-loop-monitor">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-      <h3 style="font-size:14px;font-weight:600;margin:0">🔄 Loop Monitor</h3>
-      <div style="display:flex;gap:8px">
-        <button class="btn small loop-refresh-btn" id="loop-refresh-btn" onclick="loadLoopMonitor()"><span class="icon">↻</span> Refresh</button>
-        <button class="btn small" onclick="loadLoopMonitor(true)">⟳ Auto-Refresh</button>
-      </div>
-    </div>
-
-    <!-- Stats Row -->
-    <div class="loop-monitor-grid" id="loop-stats">
-      <div class="loop-stat-card accent" id="loop-stat-goals">
-        <div class="label">Active Goals</div>
-        <div class="value" id="loop-active-goals">—</div>
-        <div class="sub" id="loop-active-sub">Loading…</div>
-      </div>
-      <div class="loop-stat-card green" id="loop-stat-quality">
-        <div class="label">Avg Quality</div>
-        <div class="value" id="loop-avg-quality">—</div>
-        <div class="sub" id="loop-quality-sub">Across all verified tasks</div>
-      </div>
-      <div class="loop-stat-card yellow" id="loop-stat-corrections">
-        <div class="label">Corrections</div>
-        <div class="value" id="loop-corrections">—</div>
-        <div class="sub" id="loop-corrections-sub">Self-correction attempts</div>
-      </div>
-      <div class="loop-stat-card red" id="loop-stat-escalations">
-        <div class="label">Escalations</div>
-        <div class="value" id="loop-escalations">—</div>
-        <div class="sub" id="loop-escalations-sub">Needs human input</div>
-      </div>
-      <div class="loop-stat-card accent" id="loop-stat-iterations">
-        <div class="label">Total Iterations</div>
-        <div class="value" id="loop-iterations">—</div>
-        <div class="sub" id="loop-iterations-sub">Across all goals</div>
-      </div>
-      <div class="loop-stat-card green" id="loop-stat-completed">
-        <div class="label">Completed</div>
-        <div class="value" id="loop-completed">—</div>
-        <div class="sub" id="loop-completed-sub">Goals finished</div>
-      </div>
-    </div>
-
-    <!-- Active Goals Loop Status -->
-    <div class="panel" style="margin-bottom:16px">
-      <h3>🎯 Active Goal Loops <span class="more" onclick="loadLoopMonitor()">↻ Refresh</span></h3>
-      <div id="loop-goals-list"><div class="loading">Loading…</div></div>
-    </div>
-
-    <!-- Two-column: Corrections + Escalations -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
-      <div class="panel">
-        <h3>🔧 Recent Corrections <span class="more" onclick="loadCorrections()">↻ Refresh</span></h3>
-        <div id="loop-corrections-list" style="max-height:400px;overflow-y:auto"><div class="loading">Loading…</div></div>
-      </div>
-      <div class="panel">
-        <h3>🚨 Escalations <span class="more" onclick="loadEscalations()">↻ Refresh</span></h3>
-        <div id="loop-escalations-list" style="max-height:400px;overflow-y:auto"><div class="loading">Loading…</div></div>
-      </div>
-    </div>
-
-    <!-- Guard Configuration -->
-    <div class="panel" style="margin-bottom:16px">
-      <h3>🛡 Guard Configuration <span class="more" onclick="loadGuardConfig()">↻ Refresh</span></h3>
-      <div id="loop-guard-config"><div class="loading">Loading…</div></div>
-    </div>
-
-    <!-- Checkpoint Status -->
-    <div class="panel">
-      <h3>💾 Checkpoint Status <span class="more" onclick="loadCheckpoints()">↻ Refresh</span></h3>
-      <div id="loop-checkpoints-list" class="checkpoint-list"><div class="loading">Loading…</div></div>
-    </div>
-  </div>
-
-  <!-- LnB — Learn & Build -->
-  <div class="content view" id="view-lnb">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-      <h3 style="font-size:14px;font-weight:600;margin:0">📚 Learn & Build <span style="font-size:11px;color:var(--text-dim);font-weight:400">Turn anything into a permanent skill</span></h3>
-      <div style="display:flex;gap:8px">
-        <button class="btn small" onclick="loadLnbStats()">↻ Stats</button>
-        <button class="btn primary small" onclick="toggleLnbForm()">+ Learn</button>
-      </div>
-    </div>
-
-    <!-- Learn Form -->
-    <div id="lnb-form" style="display:none;margin-bottom:20px;padding:20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)">
-      <div style="display:flex;flex-direction:column;gap:12px">
-        <div>
-          <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Source (URL, text, or file path)</label>
-          <input type="text" id="lnb-source" placeholder="https://example.com/article or ~/notes/guide.md or paste text…" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 14px;color:var(--text);font-size:13px;outline:none;font-family:inherit">
-        </div>
-        <div>
-          <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Topic (optional — auto-detected)</label>
-          <input type="text" id="lnb-topic" placeholder="e.g. AI Automation, REST API, Threat Modeling…" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 14px;color:var(--text);font-size:13px;outline:none;font-family:inherit">
-        </div>
-        <div style="display:flex;gap:10px;align-items:center">
-          <select id="lnb-type" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-size:13px;outline:none;font-family:inherit">
-            <option value="auto">🔍 Auto-detect</option>
-            <option value="url">🌐 URL</option>
-            <option value="file">📄 File</option>
-            <option value="text">✏️ Text</option>
-          </select>
-          <button class="btn primary" onclick="submitLearn()">📚 Learn & Build Skill</button>
-          <span id="lnb-status" style="font-size:12px;color:var(--text-dim)"></span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Stats Bar -->
-    <div id="lnb-stats" style="display:flex;gap:16px;margin-bottom:20px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)">
-      <div><span style="font-size:18px;font-weight:700" id="lnb-total-skills">0</span><br><span style="font-size:10px;color:var(--text-dim)">Skills Created</span></div>
-      <div><span style="font-size:18px;font-weight:700" id="lnb-verified">0</span><br><span style="font-size:10px;color:var(--text-dim)">Verified</span></div>
-      <div><span style="font-size:18px;font-weight:700" id="lnb-learning-events">0</span><br><span style="font-size:10px;color:var(--text-dim)">Learning Events</span></div>
-    </div>
-
-    <!-- Skills List -->
-    <div id="lnb-skills-list" class="lnb-skills-grid"><div class="loading">Loading skills…</div></div>
-  </div>
 
   <!-- DAILY -->
   <!-- TASK QUEUE -->
@@ -924,366 +776,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-
     <div id="outputs-empty" style="display:none" class="empty">No outputs found.<br>Complete a goal or task to generate outputs.</div>
   </div>
 
-  <!-- OPENAI OAUTH (Sign in with ChatGPT) -->
-  <div class="content view" id="view-openai_oauth">
-    <div style="display:flex;flex-direction:column;height:calc(100vh - 104px);gap:14px;overflow-y:auto">
-      <div style="display:flex;align-items:center;gap:12px">
-        <h3 style="margin:0">🤖 OpenAI OAuth — Sign in with ChatGPT</h3>
-        <span id="openai-oauth-status" style="font-size:12px;color:var(--text-dim)">Loading…</span>
-      </div>
-
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;max-width:760px">
-        <p style="margin-top:0;line-height:1.6;color:var(--text-dim);font-size:13px">
-          Turn your <strong>ChatGPT account</strong> into a free OpenAI-compatible API via the open-source
-          <a href="https://github.com/evanjodav/openai-oauth" target="_blank" style="color:var(--accent)">openai-oauth</a>
-          bridge (the "$3B loophole"). No paid API key required. The bridge runs locally; your credentials never leave this machine.
-          <br><br>
-          <span style="color:var(--warning)">⚠ Subject to OpenAI's Terms of Use.</span>
-        </p>
-
-        <div id="openai-oauth-connected" style="display:none">
-          <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px">
-            <div style="width:10px;height:10px;border-radius:50%;background:#3ecf8e" id="openai-oauth-dot"></div>
-            <span id="openai-oauth-state-text" style="font-weight:600">Connected</span>
-          </div>
-          <div style="font-size:13px;color:var(--text-dim);line-height:1.9">
-            <div>Account: <code id="openai-oauth-account">—</code></div>
-            <div>Bridge: <code id="openai-oauth-base">—</code></div>
-            <div>Model: <code id="openai-oauth-model">—</code></div>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:16px">
-            <button class="btn" onclick="openaiOauthDisconnect()">Disconnect</button>
-            <button class="btn" onclick="openaiOauthRefresh()">↻ Refresh</button>
-          </div>
-        </div>
-
-        <div id="openai-oauth-disconnected">
-          <div style="display:flex;flex-direction:column;gap:12px;max-width:420px">
-            <label style="font-size:13px">ChatGPT account email (optional, for display)
-              <input id="openai-oauth-email" class="input" placeholder="you@example.com" style="margin-top:4px;width:100%">
-            </label>
-            <label style="font-size:13px">Model
-              <select id="openai-oauth-model-select" class="input" style="margin-top:4px;width:100%">
-                <option value="gpt-4o">gpt-4o</option>
-                <option value="gpt-4o-mini">gpt-4o-mini</option>
-                <option value="o3">o3</option>
-                <option value="o4-mini">o4-mini</option>
-              </select>
-            </label>
-            <label style="font-size:12px;color:var(--text-dim)">
-              <input type="checkbox" id="openai-oauth-autostart" checked> Auto-start bridge on MoiraiCore boot
-            </label>
-            <button class="btn primary" id="openai-oauth-connect-btn" onclick="openaiOauthConnect()" style="align-self:flex-start">
-              🔌 Connect with ChatGPT
-            </button>
-            <span id="openai-oauth-msg" style="font-size:12px;color:var(--text-dim)"></span>
-          </div>
-        </div>
-      </div>
-
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;max-width:760px">
-        <h4 style="margin-top:0">How it works</h4>
-        <ol style="font-size:13px;color:var(--text-dim);line-height:1.7;margin:0;padding-left:20px">
-          <li>Click <strong>Connect with ChatGPT</strong> — MoiraiCore launches the local <code>openai-oauth</code> bridge.</li>
-          <li>The first time, the bridge opens your browser to sign in with your ChatGPT account (OAuth).</li>
-          <li>The bridge exposes a standard OpenAI-compatible endpoint at <code>http://127.0.0.1:10531/v1</code>.</li>
-          <li>The <strong>Codex</strong> agent is routed through this endpoint — key-free inference.</li>
-        </ol>
-      </div>
-    </div>
-  </div>
-
-  <!-- HERMES BRIDGE -->
-  <div class="content view" id="view-hermes">
-    <div style="display:flex;flex-direction:column;height:calc(100vh - 104px);gap:12px">
-      <!-- Header -->
-      <div style="display:flex;align-items:center;gap:12px">
-        <h3 style="margin:0">🦉 Hermes Bridge</h3>
-        <span id="hermes-status" style="font-size:11px;color:var(--text-dim)">Checking…</span>
-        <button class="btn" style="font-size:11px;padding:4px 8px;margin-left:auto" onclick="loadHermesConversations()">📜 History</button>
-      </div>
-
-      <!-- Conversation display -->
-      <div id="hermes-chat" style="flex:1;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;display:flex;flex-direction:column;gap:12px">
-        <div class="empty" id="hermes-welcome">Ask Hermes anything. Send context from your vault files, notes, or task descriptions.
-<br><br>
-💡 <strong>Tip:</strong> Open any vault file in Notes editor and click "Send to Hermes" to analyze it.</div>
-      </div>
-
-      <!-- Context source indicator -->
-      <div id="hermes-context-bar" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-size:12px;color:var(--text-dim)">
-        📎 Context: <span id="hermes-context-name"></span>
-        <button class="btn" style="font-size:10px;padding:2px 6px;margin-left:8px" onclick="clearHermesContext()">✕ Clear</button>
-      </div>
-
-      <!-- Input area -->
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px">
-        <textarea id="hermes-input" placeholder="Ask Hermes anything… (Shift+Enter for new line, Enter to send)" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;color:var(--text);font-family:inherit;font-size:13px;resize:none;outline:none" onkeydown="hermesInputKey(event)"></textarea>
-        <div style="display:flex;gap:8px;margin-top:8px">
-          <button class="btn primary" id="hermes-send-btn" onclick="sendToHermes()">Send →</button>
-          <button class="btn" onclick="clearHermesChat()">✕ Clear Chat</button>
-          <select id="hermes-skills" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text);font-size:11px;margin-left:auto">
-            <option value="">No extra skills</option>
-            <option value="hermes-agent">Hermes Agent</option>
-            <option value="plan">Plan Mode</option>
-          </select>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- CHANNELS (Multi-Agent) -->
-  <div class="content view" id="view-channels">
-    <div style="display:flex;gap:16px;height:calc(100vh - 104px)">
-      <!-- Left: Agent List -->
-      <div style="width:320px;min-width:320px;display:flex;flex-direction:column;gap:12px">
-        <h3 style="font-size:14px;font-weight:600;margin:0">📡 Agent Channels</h3>
-        <p style="font-size:11px;color:var(--text-dim);margin:0">Each agent has isolated memory, activity tracking, and specialized capabilities. Click an agent to inspect.</p>
-        <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px" id="channels-agent-list">
-          <div class="loading">Loading agents…</div>
-        </div>
-      </div>
-      <!-- Middle: Detail Panel -->
-      <div style="flex:1;display:flex;flex-direction:column;gap:12px;min-width:0">
-        <div id="channels-detail" style="display:flex;flex-direction:column;gap:12px;flex:1;overflow-y:auto">
-          <div class="panel" style="display:flex;align-items:center;justify-content:center;height:100%">
-            <div class="empty">← Select an agent channel to inspect its memory, activity, and outputs.</div>
-          </div>
-        </div>
-      </div>
-      <!-- Right: Activity Feed + Router -->
-      <div style="width:340px;min-width:340px;display:flex;flex-direction:column;gap:12px">
-        <!-- Router -->
-        <div class="panel" style="padding:16px">
-          <h3 style="font-size:13px;font-weight:600;margin-bottom:10px">📡 Route a Task</h3>
-          <textarea id="channels-route-input" placeholder="Describe a task to see which agent handles it…" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:12px;resize:none;outline:none"></textarea>
-          <button class="btn primary" style="margin-top:8px;font-size:12px;padding:6px 12px;width:100%" onclick="channelsRouteTask()">▶ Route</button>
-          <div id="channels-route-result" style="margin-top:8px;font-size:12px;color:var(--text-dim);display:none"></div>
-        </div>
-        <!-- Activity Feed -->
-        <div class="panel" style="padding:16px;flex:1;display:flex;flex-direction:column;gap:8px;overflow:hidden">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-            <h3 style="font-size:13px;font-weight:600">⚡ Activity Feed</h3>
-            <button class="btn small" style="font-size:10px;padding:2px 6px" onclick="channelsLoadActivity()">↻ Refresh</button>
-          </div>
-          <div id="channels-activity-feed" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px">
-            <div class="loading">Loading…</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- HERMES BRIDGE CHAT (now shows routing info) -->
-  <div class="content view" id="view-hermes">
-    <div style="display:flex;flex-direction:column;height:calc(100vh - 104px);gap:12px">
-      <!-- Header -->
-      <div style="display:flex;align-items:center;gap:12px">
-        <h3 style="margin:0">🦉 Hermes Bridge</h3>
-        <span id="hermes-status" style="font-size:11px;color:var(--text-dim)">Checking…</span>
-        <span id="hermes-route-badge" style="display:none;font-size:10px;background:rgba(124,91,245,0.2);color:var(--accent);padding:2px 8px;border-radius:4px;font-weight:600"></span>
-        <button class="btn" style="font-size:11px;padding:4px 8px;margin-left:auto" onclick="loadHermesConversations()">📜 History</button>
-      </div>
-
-      <!-- Conversation display -->
-      <div id="hermes-chat" style="flex:1;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;display:flex;flex-direction:column;gap:12px">
-        <div class="empty" id="hermes-welcome">Ask Hermes anything. Each query is auto-routed to the best agent — researcher, writer, developer, or general-purpose Hermes.
-<br><br>
-💡 <strong>Tip:</strong> Open any vault file in Notes editor and click "Send to Hermes" to analyze it.</div>
-      </div>
-
-      <!-- Context source indicator -->
-      <div id="hermes-context-bar" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-size:12px;color:var(--text-dim)">
-        📎 Context: <span id="hermes-context-name"></span>
-        <button class="btn" style="font-size:10px;padding:2px 6px;margin-left:8px" onclick="clearHermesContext()">✕ Clear</button>
-      </div>
-
-      <!-- Input area -->
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px">
-        <textarea id="hermes-input" placeholder="Ask Hermes anything… (Shift+Enter for new line, Enter to send)" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;color:var(--text);font-family:inherit;font-size:13px;resize:none;outline:none" onkeydown="hermesInputKey(event)"></textarea>
-        <div style="display:flex;gap:8px;margin-top:8px">
-          <button class="btn primary" id="hermes-send-btn" onclick="sendToHermes()">Send →</button>
-          <button class="btn" onclick="clearHermesChat()">✕ Clear Chat</button>
-          <select id="hermes-skills" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text);font-size:11px;margin-left:auto">
-            <option value="">No extra skills</option>
-            <option value="hermes-agent">Hermes Agent</option>
-            <option value="plan">Plan Mode</option>
-          </select>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ORCHESTRATE -->
-  <div class="content view" id="view-orchestrate">
-    <div style="display:flex;flex-direction:column;height:calc(100vh - 104px);gap:16px">
-      <!-- Header -->
-      <div style="display:flex;align-items:center;gap:12px">
-        <h3 style="margin:0">🎼 Orchestrate</h3>
-        <span style="font-size:11px;color:var(--text-dim)">Hermes delegates to specialist sub-agents</span>
-        <span id="orch-status" style="font-size:11px;color:var(--text-dim);margin-left:auto"></span>
-      </div>
-
-      <div style="display:flex;gap:16px;flex:1;min-height:0">
-        <!-- Left: Task Input + Run History -->
-        <div style="width:380px;min-width:380px;display:flex;flex-direction:column;gap:12px">
-          <!-- Task input -->
-          <div class="panel" style="padding:16px">
-            <h4 style="font-size:13px;font-weight:600;margin-bottom:10px">📋 New Orchestration</h4>
-            <textarea id="orch-task-input" placeholder="Describe a complex task for Hermes to orchestrate…&#10;&#10;Examples:&#10;• Research ASX trends and write a report&#10;• Build a secure REST API with docs&#10;• Create an SEO audit for my website" rows="5" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;color:var(--text);font-family:inherit;font-size:13px;resize:none;outline:none"></textarea>
-            <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-              <select id="orch-agents" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px;outline:none">
-                <option value="">🤖 Auto-detect agents</option>
-                <option value="researcher,writer">🔍 Researcher + ✍️ Writer</option>
-                <option value="researcher,writer,developer">🔍 + ✍️ + 💻 All three</option>
-                <option value="developer">💻 Developer only</option>
-                <option value="researcher">🔍 Researcher only</option>
-                <option value="writer">✍️ Writer only</option>
-              </select>
-              <select id="orch-mode" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px;outline:none">
-                <option value="parallel">⚡ Parallel</option>
-                <option value="sequential">🔄 Sequential</option>
-              </select>
-            </div>
-            <div style="display:flex;gap:8px;margin-top:8px">
-              <button class="btn primary" style="flex:1;font-size:13px;padding:8px" onclick="orchestrateRun()">🎼 Run Orchestration</button>
-              <button class="btn" onclick="document.getElementById('orch-task-input').value=''">✕ Clear</button>
-            </div>
-          </div>
-
-          <!-- Run history -->
-          <div class="panel" style="padding:16px;flex:1;display:flex;flex-direction:column;gap:8px;overflow:hidden">
-            <div style="display:flex;align-items:center;justify-content:space-between">
-              <h4 style="font-size:13px;font-weight:600">📜 Run History</h4>
-              <button class="btn small" style="font-size:10px;padding:2px 6px" onclick="orchestrateLoadHistory()">↻ Refresh</button>
-            </div>
-            <div id="orch-history" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px">
-              <div class="loading">Loading…</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Right: Live Run Detail -->
-        <div style="flex:1;display:flex;flex-direction:column;gap:12px;min-width:0">
-          <div id="orch-detail" class="panel" style="flex:1;padding:20px;display:flex;align-items:center;justify-content:center">
-            <div class="empty" style="text-align:center">
-              <div style="font-size:32px;margin-bottom:12px">🎼</div>
-              <div style="font-size:14px;font-weight:600;margin-bottom:8px">Orchestration Engine Ready</div>
-              <div style="font-size:12px;color:var(--text-dim);max-width:400px;line-height:1.6">
-                Submit a task on the left. Hermes will decompose it into parallel sub-agents,
-                each with isolated memory and role-specific templates.
-                <br><br>
-                <strong>New:</strong> Each agent has its own memory (<code>agents/*/memory.md</code>)
-                that gets loaded automatically when Hermes routes to them.
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="content view" id="view-workflows">
-    <div style="display:flex;flex-direction:column;height:calc(100vh - 104px);gap:0">
-      <!-- Top toolbar -->
-      <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
-        <button class="btn primary small" onclick="wfNew()">＋ New Workflow</button>
-        <button class="btn small" onclick="wfSave()">💾 Save</button>
-        <button class="btn small" onclick="wfRun()">▶ Run</button>
-        <button class="btn small" onclick="wfValidate()">✓ Validate</button>
-        <div style="width:1px;height:20px;background:var(--border);margin:0 4px"></div>
-        <select id="wf-selector" onchange="wfLoad(this.value)" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--text);font-size:12px;outline:none;min-width:200px">
-          <option value="">— Select workflow —</option>
-        </select>
-        <button class="btn small danger" onclick="wfDelete()">🗑 Delete</button>
-        <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
-          <span id="wf-status" style="font-size:11px;color:var(--text-dim)"></span>
-          <span id="wf-unsaved" style="font-size:11px;color:var(--yellow);display:none">● Unsaved</span>
-        </div>
-      </div>
-
-      <div style="display:flex;flex:1;min-height:0">
-        <!-- Left: Node Palette -->
-        <div style="width:180px;min-width:180px;border-right:1px solid var(--border);padding:12px;display:flex;flex-direction:column;gap:6px;overflow-y:auto">
-          <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);margin-bottom:4px">Node Palette</div>
-          <div class="wf-palette-node" draggable="true" ondragstart="wfDragStart(event,'trigger')" style="border-color:#fbbf2433;background:#fbbf2415">
-            <span style="color:#fbbf24">⚡</span> Trigger
-            <span style="font-size:10px;color:var(--text-dim);font-weight:400">manual / schedule</span>
-          </div>
-          <div class="wf-palette-node" draggable="true" ondragstart="wfDragStart(event,'agent')" style="border-color:#7c5bf533;background:#7c5bf515">
-            <span style="color:#7c5bf5">🤖</span> Agent Task
-            <span style="font-size:10px;color:var(--text-dim);font-weight:400">Hermes / Researcher…</span>
-          </div>
-          <div class="wf-palette-node" draggable="true" ondragstart="wfDragStart(event,'action')" style="border-color:#5b9bf533;background:#5b9bf515">
-            <span style="color:#5b9bf5">⚙️</span> Action
-            <span style="font-size:10px;color:var(--text-dim);font-weight:400">HTTP / Shell / File…</span>
-          </div>
-          <div class="wf-palette-node" draggable="true" ondragstart="wfDragStart(event,'condition')" style="border-color:#f472b633;background:#f472b615">
-            <span style="color:#f472b6">🔀</span> Condition
-            <span style="font-size:10px;color:var(--text-dim);font-weight:400">if / else branch</span>
-          </div>
-          <div class="wf-palette-node" draggable="true" ondragstart="wfDragStart(event,'delay')" style="border-color:#8888a033;background:#8888a015">
-            <span style="color:#8888a0">⏱</span> Delay
-            <span style="font-size:10px;color:var(--text-dim);font-weight:400">pause N seconds</span>
-          </div>
-          <div class="wf-palette-node" draggable="true" ondragstart="wfDragStart(event,'merge')" style="border-color:#8888a033;background:#8888a015">
-            <span style="color:#8888a0">⏉</span> Merge
-            <span style="font-size:10px;color:var(--text-dim);font-weight:400">combine branches</span>
-          </div>
-          <div class="wf-palette-node" draggable="true" ondragstart="wfDragStart(event,'output')" style="border-color:#4ade8033;background:#4ade8015">
-            <span style="color:#4ade80">📤</span> Output
-            <span style="font-size:10px;color:var(--text-dim);font-weight:400">save result</span>
-          </div>
-
-          <div style="border-top:1px solid var(--border);margin:8px 0"></div>
-          <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);margin-bottom:4px">Canvas Controls</div>
-          <button class="btn small" onclick="wfAutoLayout()">⊞ Auto-Layout</button>
-          <button class="btn small" onclick="wfClear()">✕ Clear All</button>
-          <button class="btn small" onclick="wfZoomFit()">⊙ Zoom Fit</button>
-        </div>
-
-        <!-- Center: Canvas -->
-        <div style="flex:1;position:relative;overflow:hidden;background:var(--bg)" id="wf-canvas-wrapper"
-             class="wf-canvas-bg"
-             ondragover="event.preventDefault()" ondrop="wfCanvasDrop(event)">
-          <svg id="wf-canvas" style="width:100%;height:100%;position:absolute;top:0;left:0;cursor:grab;pointer-events:none"
-               onmousedown="wfCanvasDown(event)" onmousemove="wfCanvasMove(event)" onmouseup="wfCanvasUp(event)" onmouseleave="wfCanvasUp(event)"
-               onwheel="wfCanvasWheel(event)">
-            <defs>
-              <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                <polygon points="0 0, 10 3.5, 0 7" fill="#555570"/>
-              </marker>
-            </defs>
-            <g id="wf-edges-layer"></g>
-          </svg>
-          <!-- Zoom indicator -->
-          <div id="wf-zoom" style="position:absolute;bottom:8px;right:8px;font-size:10px;color:var(--text-dim);background:var(--surface);padding:2px 6px;border-radius:4px">100%</div>
-        </div>
-
-        <!-- Right: Node Config Panel -->
-        <div style="width:260px;min-width:260px;border-left:1px solid var(--border);padding:14px;display:flex;flex-direction:column;gap:10px;overflow-y:auto" id="wf-config-panel">
-          <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim)">Node Properties</div>
-          <div id="wf-config-content" style="color:var(--text-dim);font-size:12px">
-            Click a node to configure it.<br><br>
-            Or drag a node type from the palette onto the canvas.
-          </div>
-        </div>
-      </div>
-
-      <!-- Bottom: Run Log -->
-      <div style="height:120px;min-height:120px;border-top:1px solid var(--border);padding:10px;display:flex;flex-direction:column;gap:6px">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim)">Run Log</span>
-          <button class="btn small" onclick="document.getElementById('wf-log').innerHTML=''">✕ Clear</button>
-          <button class="btn small" onclick="wfLoadRuns()">↻ Runs</button>
-          <span id="wf-run-status" style="font-size:11px;color:var(--text-dim);margin-left:auto"></span>
-        </div>
-        <div id="wf-log" style="flex:1;overflow-y:auto;font-size:11px;line-height:1.6;color:var(--text-dim);font-family:monospace;padding:6px;background:var(--surface);border-radius:6px">
-          Ready. Create or load a workflow to get started.
-        </div>
-      </div>
-    </div>
-  </div>
 
   <style>
   .wf-node {
@@ -1374,26 +866,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-
   </style>
 
 
-  <!-- DAILY NOTES -->
-  <div class="content view" id="view-daily">
-    <div class="panel"><h3>📅 Daily Notes</h3><div id="daily-list"><div class="loading">Loading…</div></div></div>
-  </div>
-
-  <!-- CONTEXT -->
-  <div class="content view" id="view-context">
-    <div class="panel">
-      <h3>👤 My Context</h3>
-      <div id="ctx-tabs" style="display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap"></div>
-      <div id="ctx-content"><div class="loading">Loading…</div></div>
-    </div>
-  </div>
-
-  <!-- LOOP -->
-  <div class="content view" id="view-loop">
-    <div class="panel"><h3>🔄 Feedback Loop</h3><div id="loop-content">
-      <div class="memory-item"><div class="memory-text">The feedback loop scans your workspace, indexes new files into the memory vault, and generates daily notes.</div><div class="memory-time"><button class="btn primary" onclick="runLoop()" style="margin-top:8px">⚡ Run Now</button></div></div>
-    </div></div>
-  </div>
 
   <!-- AGENTS -->
   <div class="content view" id="view-agents">
@@ -1547,50 +1019,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-
     </div>
   </div>
 
-  <!-- DIAGRAMS (Excalidraw) VIEW -->
-  <div class="content view" id="view-diagrams">
-    <div style="max-width:1280px;margin:0 auto;display:flex;flex-direction:column;height:calc(100vh - 104px);gap:12px;padding-top:4px">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-        <h3 style="margin:0">✏️ Diagrams <span style="font-size:11px;color:var(--text-dim);font-weight:400">— draw with Excalidraw (local)</span></h3>
-        <div style="display:flex;gap:8px;align-items:center">
-          <select id="diagram-select" class="input small" onchange="loadSelectedDiagram()" style="max-width:220px">
-            <option value="">— New / unsaved —</option>
-          </select>
-          <button class="btn small" onclick="newDiagram()">+ New</button>
-          <button class="btn small" onclick="promptSaveDiagram()">💾 Save</button>
-          <button class="btn small" onclick="downloadDiagram()">⬇ Export</button>
-          <button class="btn small" onclick="deleteDiagram()">🗑 Delete</button>
-        </div>
-      </div>
-      <div id="diagram-status" style="font-size:11px;color:var(--text-dim)">Loading editor…</div>
-      <div id="excalidraw-host" style="flex:1;min-height:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--bg)"></div>
-    </div>
-  </div>
 
-  <!-- ECONOMICS / TELEMETRY VIEW -->
-  <div class="content view" id="view-economics">
-    <div style="max-width:1100px;margin:0 auto;display:flex;flex-direction:column;height:calc(100vh - 104px);gap:16px;padding-top:4px">
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <h3 style="margin:0">💰 Agent Economics <span style="font-size:11px;color:var(--text-dim);font-weight:400">— cost &amp; latency per run</span></h3>
-        <button class="btn primary small" onclick="loadEconomics()">↻ Refresh</button>
-      </div>
-      <div id="econ-summary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-        <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px">
-          <h4 style="margin:0 0 10px;font-size:13px">By Tier</h4>
-          <div id="econ-by-tier"></div>
-        </div>
-        <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px">
-          <h4 style="margin:0 0 10px;font-size:13px">By Agent</h4>
-          <div id="econ-by-agent"></div>
-        </div>
-      </div>
-      <div style="flex:1;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:8px">
-        <h4 style="margin:0 0 10px;font-size:13px">Recent Runs</h4>
-        <div id="econ-runs"></div>
-      </div>
-    </div>
-  </div>
 
   <!-- PIPELINE CONTRACTS VIEW (Feature 7) -->
   <div class="content view" id="view-pipeline">
@@ -1613,42 +1042,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-
     </div>
   </div>
 
-  <!-- WEBHOOKS VIEW (Feature 8) -->
-  <div class="content view" id="view-webhooks">
-    <div style="max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:16px;padding-top:4px">
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <h3 style="margin:0">🪝 Webhooks <span style="font-size:11px;color:var(--text-dim);font-weight:400">— event triggers to the outside world</span></h3>
-        <button class="btn primary small" onclick="loadWebhooks()">↻ Refresh</button>
-      </div>
-
-      <div style="display:grid;grid-template-columns:360px 1fr;gap:16px;align-items:start">
-        <!-- Add form -->
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px">
-          <h4 style="margin:0 0 10px;font-size:13px">Add Webhook</h4>
-          <div style="display:flex;flex-direction:column;gap:8px">
-            <input id="wh-name" class="input" placeholder="Name (e.g. Slack Alerts)" style="width:100%">
-            <input id="wh-url" class="input" placeholder="https://hooks.example.com/…" style="width:100%">
-            <input id="wh-secret" class="input" placeholder="HMAC secret (optional)" style="width:100%">
-            <div style="font-size:11px;color:var(--text-dim)">Events</div>
-            <div id="wh-event-picker" style="display:flex;flex-wrap:wrap;gap:6px;max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:8px"></div>
-            <button class="btn primary" onclick="whCreate()" style="margin-top:4px">＋ Create Webhook</button>
-          </div>
-        </div>
-
-        <!-- List -->
-        <div>
-          <h4 style="margin:0 0 10px;font-size:13px">Configured Webhooks</h4>
-          <div id="wh-list" style="display:flex;flex-direction:column;gap:10px"></div>
-        </div>
-      </div>
-
-      <!-- Deliveries -->
-      <div>
-        <h4 style="margin:0 0 10px;font-size:13px">Delivery Log <span id="wh-deliv-count" style="font-size:11px;color:var(--text-dim)"></span></h4>
-        <div id="wh-deliveries" style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:8px;overflow-y:auto;max-height:320px"></div>
-      </div>
-    </div>
-  </div>
 
   <!-- 3-TIER PIPELINE ADMIN -->
   <div class="content view" id="view-tier3">
@@ -2149,109 +1542,87 @@ function go(view, el) {
   if(view==='jarvis') { loadJarvis(); }
   if(view==='projects') { loadProjects(); }
   if(view==='outputs') { loadOutputs(); }
-  const t = {dashboard:'Home',jarvis:'Jarvis',projects:'Projects',kanban:'Kanban',goals:'Goals','loop-monitor':'Loop Monitor',live:'Live Activity',lnb:'Learn & Build',daily:'Daily Notes',context:'My Context',loop:'Feedback Loop',graph:'Knowledge Graph',agents:'Agents',notes:'Notes',tasks:'Tasks',outputs:'Outputs',reports:'Reports',hermes:'Hermes Bridge',channels:'Agent Channels',orchestrate:'Orchestrate',workflows:'Workflow Builder',systemlogs:'System Logs',audit:'Audit Trail',economics:'Economics',settings:'Settings',pipeline:'Pipeline',tier3:'3-Tier Pipeline',webhooks:'Webhooks',diagrams:'Diagrams',openai_oauth:'OpenAI OAuth'};
+  const t = {dashboard:'Home',jarvis:'Jarvis',projects:'Projects',kanban:'Kanban',goals:'Goals',graph:'Knowledge Graph',agents:'Agents',notes:'Notes',tasks:'Tasks',outputs:'Outputs',reports:'Reports',systemlogs:'System Logs',audit:'Audit Trail',settings:'Settings',pipeline:'Pipeline',tier3:'3-Tier Pipeline'};
   document.getElementById('page-title').textContent = t[view]||view;
   if(view==='kanban') loadKanban();
-  if(view==='daily') loadDaily();
-  if(view==='context') loadContext();
   if(view==='graph') setTimeout(function(){ loadGraph(); }, 100);
   if(view==='notes') loadNotes('all');
   if(view==='goals') { loadGoals(); loadStats(); }
-  if(view==='lnb') { loadLnbSkills(); loadLnbStats(); }
-  if(view==='diagrams') { bootDiagramsOnce(); }
-  if(view==='loop-monitor') { loadLoopMonitor(); }
-  if(view==='live') { loadLive(); startLiveAuto(); }
   if(view==='tasks') loadTasks();
-  if(view==='hermes') checkHermesStatus();
-  if(view==='orchestrate') orchestrateLoadHistory();
-  if(view==='channels') { channelsLoadAgents(); channelsLoadActivity(); }
   if(view==='agents') { channelsLoadAgentsForRegistry(); loadAgentRegistry(); }
   if(view==='systemlogs') { loadSystemLogs(); }
   if(view==='audit') { loadAudit(); }
-  if(view==='economics') { loadEconomics(); }
   if(view==='pipeline') { loadPipeline(); }
   if(view==='tier3') { loadTier3(); }
-  if(view==='webhooks') { loadWebhooks(); }
-  if(view==='openai_oauth') { loadOpenaiOauth(); }
 }
 
-// ═══ OPENAI OAUTH (Sign in with ChatGPT) ═══
-async function loadOpenaiOauth() {
-  const statusEl = document.getElementById('openai-oauth-status');
-  if (statusEl) statusEl.textContent = 'Loading…';
-  try {
-    const d = await authFetch('/auth/openai/status');
-    renderOpenaiOauth(d);
-  } catch(e) {
-    if (statusEl) statusEl.textContent = 'Error: ' + e.message;
-  }
+// ═══ PIPELINE CONTRACTS VIEW (Feature 7) ═══
+function loadPipeline() {
+  var statusEl = document.getElementById('pipeline-status');
+  var contractsEl = document.getElementById('pipeline-contracts');
+  var violEl = document.getElementById('pipeline-violations');
+  var violCount = document.getElementById('pipeline-viol-count');
+  if (statusEl) statusEl.innerHTML = '<div style="color:var(--text-dim);font-size:12px">Loading…</div>';
+  Promise.all([
+    authFetch('/api/pipeline/contracts').then(function(d){ return d && d.contracts ? d.contracts : {}; }),
+    authFetch('/api/pipeline/violations?limit=100').then(function(d){ return d && d.violations ? d.violations : []; }),
+    authFetch('/api/pipeline/status').then(function(d){ return d && d.goals ? d.goals : []; }).catch(function(){ return []; })
+  ]).then(function(res) {
+    var contracts = res[0], violations = res[1], goals = res[2];
+    // Status strip: contract count + violation count + any goal in contract_error
+    var vcount = violations.length;
+    var errGoals = goals.filter(function(g){ return g.status === 'contract_error'; });
+    if (statusEl) {
+      statusEl.innerHTML = [
+        ['Contracts', Object.keys(contracts).length],
+        ['Stages gated', 'goal→decomp→task→output→verify→merge'],
+        ['Violations', '<span style="color:' + (vcount ? 'var(--red)' : 'var(--green)') + '">' + vcount + '</span>'],
+        ['Goals w/ contract error', '<span style="color:' + (errGoals.length ? 'var(--red)' : 'var(--green)') + '">' + errGoals.length + '</span>']
+      ].map(function(c) {
+        return '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px"><div style="font-size:14px;font-weight:700">' + c[1] + '</div><div style="font-size:10px;color:var(--text-dim)">' + c[0] + '</div></div>';
+      }).join('');
+    }
+    // Contract definitions
+    if (contractsEl) {
+      var stageOrder = ['decomposition','subtask','task_card','task_output','verification','merge_request'];
+      contractsEl.innerHTML = stageOrder.filter(function(s){ return contracts[s]; }).map(function(stage) {
+        var fields = contracts[stage];
+        var rows = Object.keys(fields).map(function(f) {
+          var spec = fields[f];
+          var req = spec.required ? '<span style="color:var(--red)">required</span>' : 'optional';
+          var extra = [];
+          if (spec.allowed) extra.push('∈ {' + spec.allowed.join(', ') + '}');
+          if (spec.type) extra.push(spec.type);
+          if (spec.min_len != null) extra.push('min_len ' + spec.min_len);
+          if (spec.min_items != null) extra.push('min_items ' + spec.min_items);
+          return '<div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0;font-size:11px;border-bottom:1px solid var(--border)">' +
+            '<span style="font-family:monospace">' + f + '</span>' +
+            '<span style="color:var(--text-dim);text-align:right">' + req + (extra.length ? ' · ' + extra.join(' · ') : '') + '</span></div>';
+        }).join('');
+        return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px">' +
+          '<div style="font-size:12px;font-weight:600;margin-bottom:4px">📍 ' + stage + '</div>' + rows + '</div>';
+      }).join('');
+    }
+    // Violations
+    if (violEl) {
+      if (!vcount) {
+        violEl.innerHTML = '<div style="color:var(--text-dim);padding:12px">No contract violations recorded. All pipeline handoffs have passed their structural gates. ✅</div>';
+      } else {
+        if (violCount) violCount.textContent = '(' + vcount + ')';
+        violEl.innerHTML = violations.slice().reverse().map(function(v) {
+          var ts = (v.ts || '').replace('T', ' ').slice(0, 19);
+          var errs = (v.errors || []).map(function(e){ return '• ' + e; }).join('<br>');
+          var ctx = v.context || {};
+          return '<div style="padding:8px 10px;border-left:3px solid var(--red);background:var(--surface);border-radius:0 8px 8px 0;margin-bottom:8px">' +
+            '<div style="font-size:11px;color:var(--text-dim)">' + ts + ' · stage <strong>' + v.stage + '</strong>' + (ctx.goal_id ? ' · ' + ctx.goal_id : '') + '</div>' +
+            '<div style="font-size:11.5px;margin-top:4px;color:var(--red)">' + errs + '</div></div>';
+        }).join('');
+      }
+    }
+  }).catch(function(err) {
+    if (statusEl) statusEl.innerHTML = '<div style="color:var(--red)">⚠️ ' + (err.message || err) + '</div>';
+  });
 }
-
-function renderOpenaiOauth(d) {
-  const statusEl = document.getElementById('openai-oauth-status');
-  const connectedBox = document.getElementById('openai-oauth-connected');
-  const disconnectedBox = document.getElementById('openai-oauth-disconnected');
-  if (!d || d.available === false) {
-    if (statusEl) statusEl.textContent = 'Module unavailable';
-    if (disconnectedBox) disconnectedBox.style.display = 'none';
-    if (connectedBox) connectedBox.style.display = 'none';
-    return;
-  }
-  const connected = !!d.connected;
-  if (statusEl) statusEl.textContent = connected
-    ? (d.running ? 'Connected · bridge running' : 'Connected · bridge stopped')
-    : 'Not connected';
-  if (connectedBox) connectedBox.style.display = connected ? 'block' : 'none';
-  if (disconnectedBox) disconnectedBox.style.display = connected ? 'none' : 'block';
-  if (connected) {
-    const acct = document.getElementById('openai-oauth-account');
-    const base = document.getElementById('openai-oauth-base');
-    const model = document.getElementById('openai-oauth-model');
-    const dot = document.getElementById('openai-oauth-dot');
-    if (acct) acct.textContent = d.account_email || 'ChatGPT account';
-    if (base) base.textContent = d.base_url + '/v1';
-    if (model) model.textContent = d.model || 'gpt-4o';
-    if (dot) dot.style.background = d.running ? '#3ecf8e' : '#e0a458';
-  }
-}
-
-async function openaiOauthConnect() {
-  const btn = document.getElementById('openai-oauth-connect-btn');
-  const msg = document.getElementById('openai-oauth-msg');
-  const email = (document.getElementById('openai-oauth-email') || {}).value || null;
-  const model = (document.getElementById('openai-oauth-model-select') || {}).value || 'gpt-4o';
-  const autostart = !!(document.getElementById('openai-oauth-autostart') || {}).checked;
-  if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; }
-  if (msg) msg.textContent = 'Launching local bridge (first run may install the package)…';
-  try {
-    const d = await authFetch('/auth/openai/connect', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({account_email: email, model: model, autostart: autostart})
-    });
-    if (msg) msg.textContent = d && d.ok
-      ? (d.bridge_already_running
-          ? 'Connected — attached to the bridge already running on this port (no duplicate launched). The Codex agent now routes through it.'
-          : (d.running
-              ? 'Connected. The bridge is running. The Codex agent now routes through it.'
-              : 'Connected. The bridge is starting — complete ChatGPT sign-in in your browser if prompted. The Codex agent will route through it once up.'))
-      : 'Connect failed: ' + ((d && d.message) || 'unknown error');
-    loadOpenaiOauth();
-  } catch(e) {
-    if (msg) msg.textContent = 'Error: ' + e.message;
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '🔌 Connect with ChatGPT'; }
-  }
-}
-
-async function openaiOauthDisconnect() {
-  try {
-    await authFetch('/auth/openai/disconnect', {method: 'POST'});
-  } catch(e) { console.error(e); }
-  loadOpenaiOauth();
-}
-
-function openaiOauthRefresh() { loadOpenaiOauth(); }
 
 // ═══ 3-TIER PIPELINE ADMIN ═══
 async function loadTier3() {
@@ -4021,403 +3392,12 @@ async function loadCheckpoints() {
   }
 }
 
-// ── LnB (LEARN & BUILD) ──
-async function loadLnbSkills() {
-  try {
-    const r = await fetch('/api/lnb/skills');
-    const d = await r.json();
-    const c = document.getElementById('lnb-skills-list');
-    if(!d.skills || d.skills.length === 0) {
-      c.innerHTML = '<div style="color:var(--text-dim);font-size:13px;padding:20px">No skills learned yet. Click "+ Learn" to create your first skill from any content.</div>';
-      return;
-    }
-    let html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">';
-    d.skills.forEach(s => {
-      const desc = (s.description || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      html += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <span style="font-size:13px;font-weight:600;color:var(--text)">📚 ${s.name}</span>
-          <span style="font-size:10px;color:var(--text-dim)">${s.created ? s.created.substring(0, 10) : ''}</span>
-        </div>
-        <div style="font-size:11px;color:var(--text-dim);line-height:1.4;margin-bottom:8px">${desc}</div>
-        <div style="display:flex;gap:6px">
-          <button class="btn small" onclick="viewSkill('${s.name}')">View</button>
-          <button class="btn small danger" onclick="deleteSkill('${s.name}')">Delete</button>
-        </div>
-      </div>`;
-    });
-    html += '</div>';
-    c.innerHTML = html;
-  } catch(e) {
-    document.getElementById('lnb-skills-list').innerHTML = '<div style="color:var(--red);font-size:13px">Failed to load skills: ' + e.message + '</div>';
-  }
-}
-
-async function loadLnbStats() {
-  try {
-    const r = await fetch('/api/lnb/stats');
-    const d = await r.json();
-    document.getElementById('lnb-total-skills').textContent = d.total_skills || 0;
-    document.getElementById('lnb-verified').textContent = d.verified || 0;
-    document.getElementById('lnb-learning-events').textContent = d.total_learning_events || 0;
-    const badge = document.getElementById('nav-lnb-count');
-    if(badge) badge.textContent = d.total_skills || 0;
-  } catch(e) { /* ignore */ }
-}
-
-function toggleLnbForm() {
-  const f = document.getElementById('lnb-form');
-  f.style.display = f.style.display === 'none' ? 'block' : 'none';
-}
-
-async function submitLearn() {
-  const source = document.getElementById('lnb-source').value.trim();
-  const topic = document.getElementById('lnb-topic').value.trim();
-  const type = document.getElementById('lnb-type').value;
-  const status = document.getElementById('lnb-status');
-
-  if(!source) { status.textContent = '⚠️ Source is required'; return; }
-
-  status.textContent = '⏳ Learning... (this may take 30-60s)';
-  try {
-    const r = await fetch('/api/lnb/learn', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({source, topic, type})
-    });
-    const d = await r.json();
-    if(d.ok) {
-      status.textContent = `✅ Skill "${d.skill_name}" created! ${d.verified ? '(verified)' : ''}`;
-      document.getElementById('lnb-source').value = '';
-      document.getElementById('lnb-topic').value = '';
-      loadLnbSkills();
-      loadLnbStats();
-    } else {
-      status.textContent = '❌ ' + (d.error || 'Failed');
-    }
-  } catch(e) {
-    status.textContent = '❌ ' + e.message;
-  }
-}
-
-async function viewSkill(name) {
-  try {
-    const r = await fetch('/api/lnb/skills/' + encodeURIComponent(name));
-    const d = await r.json();
-    if(d.ok) {
-      const win = window.open('', '_blank');
-      win.document.write('<html><head><title>' + name + '</title><style>body{font-family:system-ui;max-width:800px;margin:0 auto;padding:32px;line-height:1.7;background:#12121a;color:#e4e4ef}pre{background:#1a1a26;padding:16px;border-radius:8px;overflow-x:auto}h1,h2,h3{color:#7c5bf5}code{background:#1a1a26;padding:2px 6px;border-radius:4px}a{color:#5b9bf5}</style></head><body>' + d.content.replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/&lt;(\/?[a-z][a-z0-9]*[^&]*?)&gt;/gi,'<$1>') + '</body></html>');
-    }
-  } catch(e) { alert('Failed: ' + e.message); }
-}
-
-async function deleteSkill(name) {
-  if(!confirm('Delete skill "' + name + '"?')) return;
-  try {
-    const r = await fetch('/api/lnb/skills/' + encodeURIComponent(name), {method: 'DELETE'});
-    const d = await r.json();
-    if(d.ok) {
-      loadLnbSkills();
-      loadLnbStats();
-    } else {
-      alert(d.error || 'Failed');
-    }
-  } catch(e) { alert('Failed: ' + e.message); }
-}
-
-// ── LOOP MONITOR ──
-var loopAutoRefresh = null;
-
-async function loadLoopMonitor(auto) {
-  if(auto) {
-    if(loopAutoRefresh) { clearInterval(loopAutoRefresh); loopAutoRefresh = null; }
-    loopAutoRefresh = setInterval(() => loadLoopMonitor(), 10000);
-  }
-  const btn = document.getElementById('loop-refresh-btn');
-  if(btn) btn.classList.add('spinning');
-  try {
-    await Promise.all([
-      loadLoopStats(),
-      loadLoopGoals(),
-      loadCorrections(),
-      loadEscalations(),
-      loadGuardConfig(),
-      loadLoopCheckpoints(),
-    ]);
-  } finally {
-    if(btn) btn.classList.remove('spinning');
-  }
-}
-
-async function loadLoopStats() {
-  const goalsData = await authFetch('/goals');
-  const goals = (goalsData && goalsData.goals) ? goalsData.goals : [];
-  const correctionsData = await authFetch('/corrections');
-  const corrections = (correctionsData && correctionsData.corrections) || [];
-  const escalationsData = await authFetch('/escalations');
-  const escalations = (escalationsData && escalationsData.escalations) || [];
-
-  const active = goals.filter(g => ['in_progress','active','decomposed','partial'].includes(g.status));
-  const completed = goals.filter(g => g.status === 'completed');
-  const totalIterations = goals.reduce((a, g) => a + (g.loop_iterations || 0), 0);
-
-  // Calculate average quality across all goals with verification scores
-  let allScores = [];
-  for(const g of goals) {
-    if(g.verification_scores) {
-      for(const s of g.verification_scores) {
-        if(typeof s.score === 'number') allScores.push(s.score);
-      }
-    }
-  }
-  const avgQuality = allScores.length ? Math.round((allScores.reduce((a,b) => a+b, 0) / allScores.length) * 100) : 0;
-
-  document.getElementById('loop-active-goals').textContent = active.length;
-  document.getElementById('loop-active-sub').textContent = `${goals.length} total goals`;
-  document.getElementById('loop-avg-quality').textContent = allScores.length ? `${avgQuality}%` : 'N/A';
-  document.getElementById('loop-quality-sub').textContent = `${allScores.length} verified task${allScores.length !== 1 ? 's' : ''}`;
-  document.getElementById('loop-corrections').textContent = corrections.length;
-  document.getElementById('loop-corrections-sub').textContent = `${corrections.filter(c => c.action === 'retry').length} retries`;
-  document.getElementById('loop-escalations').textContent = escalations.length;
-  document.getElementById('loop-escalations-sub').textContent = escalations.length ? 'Needs attention!' : 'None';
-  document.getElementById('loop-iterations').textContent = totalIterations;
-  document.getElementById('loop-iterations-sub').textContent = `Across ${goals.length} goal${goals.length !== 1 ? 's' : ''}`;
-  document.getElementById('loop-completed').textContent = completed.length;
-  document.getElementById('loop-completed-sub').textContent = `${goals.length ? Math.round((completed.length/goals.length)*100) : 0}% completion rate`;
-}
-
-async function loadLoopGoals() {
-  const el = document.getElementById('loop-goals-list');
-  if(!el) return;
-  const goalsData = await authFetch('/goals');
-  const goals = (goalsData && goalsData.goals) ? goalsData.goals : [];
-  const active = goals.filter(g => g.status !== 'completed');
-
-  if(!active.length) {
-    el.innerHTML = '<div class="loop-empty"><div class="empty-icon">🎯</div><div class="empty-text">No active goals.<br>Create a goal to see loop status here.</div></div>';
-    return;
-  }
-
-  const statusDotClass = {in_progress:'running', active:'running', decomposed:'idle', paused:'paused', paused_guard:'guard', partial:'paused', failed:'guard'};
-
-  el.innerHTML = active.map(g => {
-    const dotClass = statusDotClass[g.status] || 'idle';
-    const iter = g.loop_iterations || 0;
-    const maxIter = 10; // Will be updated from guard config
-    const tasks = g.tasks || [];
-    const completed = tasks.filter(t => t.status === 'completed').length;
-    const total = tasks.length;
-    const scores = (g.verification_scores || []).filter(s => typeof s.score === 'number');
-    const avgScore = scores.length ? (scores.reduce((a,b) => a+b.score, 0) / scores.length) : 0;
-    const qualityClass = avgScore >= 0.8 ? 'high' : avgScore >= 0.5 ? 'mid' : 'low';
-    const qualityLabel = avgScore ? `${Math.round(avgScore*100)}%` : 'N/A';
-
-    // Iteration bar segments
-    let iterBar = '';
-    if(iter > 0) {
-      iterBar = '<div class="loop-iteration-bar">';
-      for(let i = 1; i <= Math.max(iter, maxIter); i++) {
-        const cls = i < iter ? 'filled' : i === iter ? 'current' : '';
-        iterBar += `<div class="loop-iteration-seg ${cls}"></div>`;
-      }
-      iterBar += '</div>';
-    }
-
-    return `<div class="loop-goal-row">
-      <div class="goal-status-dot ${dotClass}"></div>
-      <div class="goal-name" title="${(g.title||'').replace(/"/g,'&quot;')}">${g.title||'Untitled'}</div>
-      <span class="goal-iter">Iter ${iter}</span>
-      <span class="goal-quality ${qualityClass}">${qualityLabel}</span>
-      <span class="goal-iter">${completed}/${total} tasks</span>
-      ${g.guard_triggered ? `<span class="escalation-badge">🛑 ${g.guard_triggered.substring(0,40)}</span>` : ''}
-      ${g.corrections_log && g.corrections_log.length ? `<span style="font-size:10px;color:var(--yellow)">🔧 ${g.corrections_log.length}</span>` : ''}
-    </div>${iterBar}`;
-  }).join('');
-}
-
-async function loadCorrections() {
-  const el = document.getElementById('loop-corrections-list');
-  if(!el) return;
-  const result = await authFetch('/corrections');
-  const corrections = (result && result.corrections) || [];
-
-  if(!corrections.length) {
-    el.innerHTML = '<div class="loop-empty"><div class="empty-icon">✅</div><div class="empty-text">No corrections yet.<br>Self-corrections will appear here.</div></div>';
-    return;
-  }
-
-  const recent = corrections.slice(0, 20);
-  el.innerHTML = recent.map(c => `
-    <div class="correction-item ${c.action === 'escalate' ? 'escalated' : ''}">
-      <span class="corr-icon">${c.action === 'escalate' ? '🚨' : '🔧'}</span>
-      <div class="corr-body">
-        <div class="corr-task">${c.task_title || c.task_id || 'Unknown task'}</div>
-        <div class="corr-reason">${c.reasoning || c.failure_reason || 'Self-correction applied'}</div>
-        <div class="corr-time">Attempt ${c.attempt} · ${c.created_at ? new Date(c.created_at).toLocaleString('en-AU',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : ''}</div>
-      </div>
-    </div>
-  `).join('');
-}
-
-async function loadEscalations() {
-  const el = document.getElementById('loop-escalations-list');
-  if(!el) return;
-  const result = await authFetch('/escalations');
-  const escalations = (result && result.escalations) || [];
-
-  if(!escalations.length) {
-    el.innerHTML = '<div class="loop-empty"><div class="empty-icon">✅</div><div class="empty-text">No escalations.<br>All tasks resolving automatically.</div></div>';
-    return;
-  }
-
-  el.innerHTML = escalations.slice(0, 20).map(e => `
-    <div class="correction-item escalated">
-      <span class="corr-icon">🚨</span>
-      <div class="corr-body">
-        <div class="corr-task">${e.task_title || e.task_id || 'Unknown task'}</div>
-        <div class="corr-reason">${e.reasoning || e.failure_reason || 'Max retries exceeded — needs human input'}</div>
-        <div class="corr-time">After ${e.attempt} attempt${e.attempt !== 1 ? 's' : ''} · ${e.created_at ? new Date(e.created_at).toLocaleString('en-AU',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : ''}</div>
-      </div>
-    </div>
-  `).join('');
-}
-
-async function loadGuardConfig() {
-  const el = document.getElementById('loop-guard-config');
-  if(!el) return;
-  const result = await authFetch('/config/guards');
-  const config = (result && result.ok && result.config) ? result.config : null;
-
-  const defaults = config && config.defaults ? config.defaults : {
-    max_iterations: 10, max_tokens_usd: 5.00, max_duration_seconds: 3600,
-    max_retries_per_task: 2, quality_threshold: 0.6, convergence_rounds: 3,
-  };
-
-  const guards = [
-    {key:'max_iterations', name:'Max Iterations', desc:'Maximum subtask execution rounds per goal', val:defaults.max_iterations},
-    {key:'max_tokens_usd', name:'Token Cap (USD)', desc:'Maximum spend per goal in USD', val:defaults.max_tokens_usd},
-    {key:'max_duration_seconds', name:'Timeout (seconds)', desc:'Wall-clock timeout per goal', val:defaults.max_duration_seconds},
-    {key:'max_retries_per_task', name:'Max Retries/Task', desc:'Retry limit per subtask before escalation', val:defaults.max_retries_per_task},
-    {key:'quality_threshold', name:'Quality Threshold', desc:'Minimum verification score (0-1)', val:defaults.quality_threshold},
-    {key:'convergence_rounds', name:'Convergence Rounds', desc:'Stop if no progress for N rounds', val:defaults.convergence_rounds},
-  ];
-
-  el.innerHTML = guards.map(g => `
-    <div class="guard-config-row">
-      <div style="flex:1">
-        <div class="guard-name">${g.name}</div>
-        <div class="guard-desc">${g.desc}</div>
-      </div>
-      <input class="guard-input" type="${g.key === 'max_tokens_usd' || g.key === 'quality_threshold' ? 'number' : 'text'}" value="${g.val}" id="guard-${g.key}" ${g.key === 'max_tokens_usd' || g.key === 'quality_threshold' ? 'step="0.1"' : ''} onchange="updateGuardConfig('${g.key}', this.value)">
-    </div>
-  `).join('') + `
-    <div style="display:flex;gap:8px;margin-top:12px">
-      <button class="btn primary small" onclick="saveGuardConfig()">💾 Save Config</button>
-      <button class="btn small" onclick="loadGuardConfig()">↻ Reset</button>
-    </div>
-  `;
-}
-
-async function updateGuardConfig(key, value) {
-  // Store pending change — saved when user clicks Save
-  window._pendingGuardChanges = window._pendingGuardChanges || {};
-  window._pendingGuardChanges[key] = parseFloat(value) || value;
-}
-
-async function saveGuardConfig() {
-  if(!window._pendingGuardChanges) { alert('No changes to save'); return }
-  const changes = window._pendingGuardChanges;
-  window._pendingGuardChanges = null;
-  const result = await authFetch('/config/guards', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({defaults: changes}),
-  });
-  if(result && result.ok) {
-    alert('✅ Guard config saved');
-    loadGuardConfig();
-  } else {
-    alert('Failed to save: ' + (result && result.error || 'Unknown'));
-  }
-}
-
-async function loadLoopCheckpoints() {
-  const el = document.getElementById('loop-checkpoints-list');
-  if(!el) return;
-  const result = await authFetch('/checkpoints');
-  const checkpoints = (result && result.checkpoints) || [];
-
-  if(!checkpoints.length) {
-    el.innerHTML = '<div class="empty">No checkpoints saved</div>';
-    return;
-  }
-
-  el.innerHTML = checkpoints.map(cp => `
-    <div class="checkpoint-item">
-      <span class="cp-goal">${cp.title || cp.goal_id}</span>
-      <span class="cp-status goal-status-badge ${cp.status}">${cp.status}</span>
-      <span class="cp-time">Iter ${cp.loop_iterations || 0} · ${cp.tasks_completed}/${cp.tasks_total}</span>
-      <span class="cp-time">${cp.saved_at ? new Date(cp.saved_at).toLocaleString('en-AU',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : ''}</span>
-    </div>
-  `).join('');
-}
-
-async function refreshGoalTasks() {
-  // Refresh all goals with their linked tasks
-  for(const g of goals) {
-    const data = await authFetch('/goals/' + g.id);
-    if(data && data.tasks) {
-      g.tasks = data.tasks;
-    }
-  }
-  loadGoals();
-}
-
-// ── TASK RUNNER ──
-
-async function refreshRunnerStatus() {
-  const s = await authFetch('/task-runner/status');
-  const dot = document.getElementById('runner-dot');
-  const text = document.getElementById('runner-text');
-  if(!s) {
-    dot.className = 'runner-dot';
-    text.textContent = 'Offline';
-    return;
-  }
-  dot.className = 'runner-dot' + (s.running ? ' running' : '');
-  text.textContent = s.running ? `Running (PID ${s.pid}) · ${JSON.stringify(s.tasks)}` : `Stopped · ${JSON.stringify(s.tasks)}`;
-}
-
-async function runTasksOnce() {
-  const btn = document.getElementById('btn-run-once');
-  if(btn) { btn.disabled = true; btn.textContent = '⏳ Running…'; }
-  refreshRunnerStatus();
-  const result = await authFetch('/task-runner/run-once', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({}),
-  });
-  if(result && result.output) {
-    // Refresh after a delay
-    setTimeout(() => { loadGoals(); refreshRunnerStatus(); }, 2000);
-  }
-  if(btn) { btn.disabled = false; btn.textContent = '▶ Run Queued Tasks'; }
-
-  // Poll for updates
-  let polls = 0;
-  const pollInterval = setInterval(async () => {
-    await refreshGoalTasks();
-    await refreshRunnerStatus();
-    polls++;
-    if(polls >= 10) clearInterval(pollInterval);
-  }, 5000);
-}
-
 // ═══ DAILY NOTES ═══
 async function loadDaily() {
   const notes = await authFetch('/daily') || [];
   const el = document.getElementById('daily-list');
   const prev = document.getElementById('daily-preview');
+  if (!el) return; // daily view removed; nothing to render
   if(!notes.length) {
     el.innerHTML = '<div class="empty">No daily notes yet.<br>Run the feedback loop to generate them.</div>';
     if(prev) prev.innerHTML = el.innerHTML;
@@ -4451,6 +3431,7 @@ let ctxActive = null;
 async function loadContext() {
   const container = document.getElementById('ctx-content');
   const tabs = document.getElementById('ctx-tabs');
+  if (!container) return; // context view removed; nothing to render
   try {
     const data = await authFetch('/vault/list?folder=context');
     ctxFiles = (data && data.files) || [];
@@ -4477,6 +3458,7 @@ async function openCtxFile(id) {
   ctxActive = id;
   const container = document.getElementById('ctx-content');
   const tabs = document.getElementById('ctx-tabs');
+  if (!container) return; // context view removed
   // Update tab styles
   if (tabs) {
     Array.from(tabs.querySelectorAll('btn, button')).forEach(b => {
@@ -4501,7 +3483,8 @@ async function runLoop() {
   const r = await authFetch('/loop');
   const ok = r && r.ok;
   const msg = ok ? '✅ Loop complete! Indexed workspace files into memory vault.' : (r&&r.error)||'Loop failed.';
-  document.getElementById('loop-content').innerHTML = `<div class="memory-item"><div class="memory-text">${msg}</div><div class="memory-time">${new Date().toLocaleTimeString()}</div></div>`;
+  const lc = document.getElementById('loop-content');
+  if (lc) lc.innerHTML = `<div class="memory-item"><div class="memory-text">${msg}</div><div class="memory-time">${new Date().toLocaleTimeString()}</div></div>`;
   loadRecentActivity(); loadDaily(); loadStats();
   if(btn) { btn.textContent = '⚡ Run Again'; btn.disabled = false; }
 }
@@ -6451,249 +5434,6 @@ function renderAuditStats(events) {
     '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 14px"><div style="font-size:18px;font-weight:700;color:var(--green)">' + (total - failures) + '</div><div style="font-size:11px;color:var(--text-dim)">Success</div></div>' +
     '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 14px"><div style="font-size:18px;font-weight:700;color:' + (failures ? 'var(--red)' : 'var(--green)') + '">' + failures + '</div><div style="font-size:11px;color:var(--text-dim)">Failures</div></div>' +
     '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' + top + '</div>';
-}
-
-// ═══ ECONOMICS / TELEMETRY VIEW ═══
-function loadEconomics() {
-  var sumEl = document.getElementById('econ-summary');
-  if (sumEl) sumEl.innerHTML = '<div style="color:var(--text-dim);font-size:12px">Loading…</div>';
-  authFetch('/api/telemetry/summary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ limit: 50 }) })
-    .then(function(d) {
-      if (!d || !d.ok) { if (sumEl) sumEl.innerHTML = '<div style="color:var(--red)">⚠️ ' + (d && d.error ? d.error : 'Failed') + '</div>'; return; }
-      var s = d.summary || {};
-      var runs = d.runs || [];
-      // Summary cards
-      if (sumEl) {
-        sumEl.innerHTML = [
-          ['Total Runs', s.total_runs || 0],
-          ['Total Cost', '$' + (s.total_cost_usd != null ? s.total_cost_usd.toFixed(4) : '0.0000')],
-          ['Avg Latency', (s.avg_duration_ms || 0) + ' ms'],
-          ['Success', s.successes || 0],
-          ['Failures', s.failures || 0],
-        ].map(function(c) {
-          return '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px"><div style="font-size:20px;font-weight:700">' + c[1] + '</div><div style="font-size:11px;color:var(--text-dim)">' + c[0] + '</div></div>';
-        }).join('');
-      }
-      // By tier
-      var tierEl = document.getElementById('econ-by-tier');
-      if (tierEl) tierEl.innerHTML = econTable(s.by_tier);
-      var agentEl = document.getElementById('econ-by-agent');
-      if (agentEl) agentEl.innerHTML = econTable(s.by_agent);
-      // Recent runs
-      var runsEl = document.getElementById('econ-runs');
-      if (runsEl) {
-        if (!runs.length) { runsEl.innerHTML = '<div style="color:var(--text-dim);padding:12px">No runs recorded yet. Run a goal or trigger the ScrumGate to populate telemetry.</div>'; }
-        else {
-          runsEl.innerHTML = runs.slice().reverse().map(function(r) {
-            var ts = (r.ts || '').replace('T', ' ').slice(0, 19);
-            var c = '$' + (r.cost_usd != null ? r.cost_usd.toFixed(5) : '0.00000');
-            return '<div style="display:flex;justify-content:space-between;gap:12px;padding:7px 10px;border-bottom:1px solid var(--border);font-size:11.5px">' +
-              '<span style="color:var(--text-dim);white-space:nowrap">' + ts + '</span>' +
-              '<span style="flex:1">' + (r.agent || '?') + ' <span style="color:var(--text-dim)">· T' + (r.tier || '?') + ' · ' + (r.model || '?') + '</span></span>' +
-              '<span style="white-space:nowrap">' + (r.duration_ms || 0) + 'ms</span>' +
-              '<span style="white-space:nowrap;color:var(--accent)">' + c + '</span>' +
-              '<span style="white-space:nowrap">' + (r.ok ? '<span style="color:var(--green)">✓</span>' : '<span style="color:var(--red)">✗</span>') + '</span>' +
-            '</div>';
-          }).join('');
-        }
-      }
-    })
-    .catch(function(err) { if (sumEl) sumEl.innerHTML = '<div style="color:var(--red)">⚠️ ' + err.message + '</div>'; });
-}
-
-function econTable(bucket) {
-  if (!bucket || !Object.keys(bucket).length) return '<div style="color:var(--text-dim);font-size:11px;padding:4px">No data</div>';
-  return Object.keys(bucket).map(function(k) {
-    var v = bucket[k];
-    return '<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 4px;border-bottom:1px solid var(--border);font-size:11.5px">' +
-      '<span><strong>' + k + '</strong> <span style="color:var(--text-dim)">(' + v.runs + ' runs)</span></span>' +
-      '<span style="font-family:monospace">$' + (v.cost_usd != null ? v.cost_usd.toFixed(4) : '0') + ' · ' + (v.avg_duration_ms || 0) + 'ms avg</span>' +
-    '</div>';
-  }).join('');
-}
-
-// ═══ PIPELINE CONTRACTS VIEW (Feature 7) ═══
-function loadPipeline() {
-  var statusEl = document.getElementById('pipeline-status');
-  var contractsEl = document.getElementById('pipeline-contracts');
-  var violEl = document.getElementById('pipeline-violations');
-  var violCount = document.getElementById('pipeline-viol-count');
-  if (statusEl) statusEl.innerHTML = '<div style="color:var(--text-dim);font-size:12px">Loading…</div>';
-  Promise.all([
-    authFetch('/api/pipeline/contracts').then(function(d){ return d && d.contracts ? d.contracts : {}; }),
-    authFetch('/api/pipeline/violations?limit=100').then(function(d){ return d && d.violations ? d.violations : []; }),
-    authFetch('/api/pipeline/status').then(function(d){ return d && d.goals ? d.goals : []; }).catch(function(){ return []; })
-  ]).then(function(res) {
-    var contracts = res[0], violations = res[1], goals = res[2];
-    // Status strip: contract count + violation count + any goal in contract_error
-    var vcount = violations.length;
-    var errGoals = goals.filter(function(g){ return g.status === 'contract_error'; });
-    if (statusEl) {
-      statusEl.innerHTML = [
-        ['Contracts', Object.keys(contracts).length],
-        ['Stages gated', 'goal→decomp→task→output→verify→merge'],
-        ['Violations', '<span style="color:' + (vcount ? 'var(--red)' : 'var(--green)') + '">' + vcount + '</span>'],
-        ['Goals w/ contract error', '<span style="color:' + (errGoals.length ? 'var(--red)' : 'var(--green)') + '">' + errGoals.length + '</span>']
-      ].map(function(c) {
-        return '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px"><div style="font-size:14px;font-weight:700">' + c[1] + '</div><div style="font-size:10px;color:var(--text-dim)">' + c[0] + '</div></div>';
-      }).join('');
-    }
-    // Contract definitions
-    if (contractsEl) {
-      var stageOrder = ['decomposition','subtask','task_card','task_output','verification','merge_request'];
-      contractsEl.innerHTML = stageOrder.filter(function(s){ return contracts[s]; }).map(function(stage) {
-        var fields = contracts[stage];
-        var rows = Object.keys(fields).map(function(f) {
-          var spec = fields[f];
-          var req = spec.required ? '<span style="color:var(--red)">required</span>' : 'optional';
-          var extra = [];
-          if (spec.allowed) extra.push('∈ {' + spec.allowed.join(', ') + '}');
-          if (spec.type) extra.push(spec.type);
-          if (spec.min_len != null) extra.push('min_len ' + spec.min_len);
-          if (spec.min_items != null) extra.push('min_items ' + spec.min_items);
-          return '<div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0;font-size:11px;border-bottom:1px solid var(--border)">' +
-            '<span style="font-family:monospace">' + f + '</span>' +
-            '<span style="color:var(--text-dim);text-align:right">' + req + (extra.length ? ' · ' + extra.join(' · ') : '') + '</span></div>';
-        }).join('');
-        return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px">' +
-          '<div style="font-size:12px;font-weight:600;margin-bottom:4px">📍 ' + stage + '</div>' + rows + '</div>';
-      }).join('');
-    }
-    // Violations
-    if (violEl) {
-      if (!vcount) {
-        violEl.innerHTML = '<div style="color:var(--text-dim);padding:12px">No contract violations recorded. All pipeline handoffs have passed their structural gates. ✅</div>';
-      } else {
-        if (violCount) violCount.textContent = '(' + vcount + ')';
-        violEl.innerHTML = violations.slice().reverse().map(function(v) {
-          var ts = (v.ts || '').replace('T', ' ').slice(0, 19);
-          var errs = (v.errors || []).map(function(e){ return '• ' + e; }).join('<br>');
-          var ctx = v.context || {};
-          return '<div style="padding:8px 10px;border-left:3px solid var(--red);background:var(--surface);border-radius:0 8px 8px 0;margin-bottom:8px">' +
-            '<div style="font-size:11px;color:var(--text-dim)">' + ts + ' · stage <strong>' + v.stage + '</strong>' + (ctx.goal_id ? ' · ' + ctx.goal_id : '') + '</div>' +
-            '<div style="font-size:11.5px;margin-top:4px;color:var(--red)">' + errs + '</div></div>';
-        }).join('');
-      }
-    }
-  }).catch(function(err) {
-    if (statusEl) statusEl.innerHTML = '<div style="color:var(--red)">⚠️ ' + (err.message || err) + '</div>';
-  });
-}
-
-// ═══ WEBHOOKS VIEW (Feature 8) ═══
-function loadWebhooks() {
-  Promise.all([
-    authFetch('/api/webhooks').then(function(d){ return d && d.webhooks ? d.webhooks : []; }),
-    authFetch('/api/webhooks/events').then(function(d){ return d && d.events ? d.events : []; }),
-    authFetch('/api/webhooks/deliveries?limit=100').then(function(d){ return d && d.deliveries ? d.deliveries : []; })
-  ]).then(function(res) {
-    var hooks = res[0], events = res[1], deliveries = res[2];
-
-    // Event picker
-    var picker = document.getElementById('wh-event-picker');
-    if (picker) {
-      picker.innerHTML = events.map(function(e){
-        return '<label style="display:flex;align-items:center;gap:4px;font-size:11px;background:var(--surface2);padding:3px 7px;border-radius:6px;cursor:pointer">' +
-          '<input type="checkbox" value="' + e.name + '" style="accent-color:var(--accent)">' + e.name + '</label>';
-      }).join('');
-    }
-
-    // List
-    var listEl = document.getElementById('wh-list');
-    if (listEl) {
-      if (!hooks.length) {
-        listEl.innerHTML = '<div style="color:var(--text-dim);padding:12px">No webhooks configured. Add one on the left to start triggering events.</div>';
-      } else {
-        listEl.innerHTML = hooks.map(function(h){
-          var last = h.last_status || {};
-          var lastBadge = last.ok === true ? '<span style="color:var(--green)">✓ ' + (last.status_code||'') + '</span>'
-            : last.ok === false ? '<span style="color:var(--red)">✗ ' + (last.error ? last.error.slice(0,40) : last.status_code) + '</span>'
-            : '<span style="color:var(--text-dim)">—</span>';
-          var evChips = (h.events||[]).map(function(ev){ return '<span style="font-size:10px;background:var(--surface2);padding:1px 6px;border-radius:5px;color:var(--text-dim)">'+ev+'</span>'; }).join(' ');
-          return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px">' +
-            '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">' +
-              '<div style="font-weight:600;font-size:13px">' + (h.name||h.id) + '</div>' +
-              '<div style="display:flex;gap:6px">' +
-                '<button class="btn small" onclick="whTest(\'' + h.id + '\')">Test</button>' +
-                '<button class="btn small danger" onclick="whDelete(\'' + h.id + '\')">Delete</button>' +
-              '</div>' +
-            '</div>' +
-            '<div style="font-size:11px;color:var(--text-dim);margin:4px 0;word-break:break-all">' + (h.url||'') + '</div>' +
-            '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">' + evChips + '</div>' +
-            '<div style="font-size:11px">Active: ' + (h.active ? '<span style="color:var(--green)">yes</span>' : '<span style="color:var(--red)">no</span>') +
-              ' · Last delivery: ' + lastBadge + '</div>' +
-          '</div>';
-        }).join('');
-      }
-    }
-
-    // Deliveries
-    var delivEl = document.getElementById('wh-deliveries');
-    var delivCount = document.getElementById('wh-deliv-count');
-    if (delivEl) {
-      if (delivCount) delivCount.textContent = '(' + deliveries.length + ')';
-      if (!deliveries.length) {
-        delivEl.innerHTML = '<div style="color:var(--text-dim);padding:12px">No deliveries yet. Deliveries are logged asynchronously (non-blocking) — create a webhook and trigger an event.</div>';
-      } else {
-        delivEl.innerHTML = deliveries.slice(0,60).map(function(d){
-          var ts = (d.ts||'').replace('T',' ').slice(0,19);
-          var badge = d.ok ? '<span style="color:var(--green)">' + (d.status_code||'ok') + '</span>' : '<span style="color:var(--red)">' + (d.error ? 'ERR' : (d.status_code||'?')) + '</span>';
-          var nm = d.name || d.webhook_id || '';
-          return '<div style="display:flex;justify-content:space-between;gap:10px;padding:5px 8px;border-bottom:1px solid var(--border);font-size:11px">' +
-            '<span style="color:var(--text-dim);white-space:nowrap">' + ts + '</span>' +
-            '<span style="font-family:monospace;white-space:nowrap">' + (d.event||'?') + '</span>' +
-            '<span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + nm + '</span>' +
-            '<span style="white-space:nowrap">' + badge + ' <span style="color:var(--text-dim)">· ' + (d.duration_ms||0) + 'ms</span></span>' +
-          '</div>';
-        }).join('');
-      }
-    }
-  }).catch(function(err) {
-    var el = document.getElementById('wh-list');
-    if (el) el.innerHTML = '<div style="color:var(--red)">⚠️ ' + (err.message || err) + '</div>';
-  });
-}
-
-function whCreate() {
-  var name = document.getElementById('wh-name').value.trim();
-  var url = document.getElementById('wh-url').value.trim();
-  var secret = document.getElementById('wh-secret').value;
-  var events = Array.prototype.slice.call(document.querySelectorAll('#wh-event-picker input:checked')).map(function(c){ return c.value; });
-  if (!name || !url || !events.length) {
-    alert('Name, URL and at least one event are required.');
-    return;
-  }
-  authFetch('/api/webhooks', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: name, url: url, secret: secret, events: events, active: true })
-  }).then(function(d){
-    if (!d || !d.ok) { alert('Failed: ' + (d && d.error ? d.error : 'unknown')); return; }
-    document.getElementById('wh-name').value = '';
-    document.getElementById('wh-url').value = '';
-    document.getElementById('wh-secret').value = '';
-    loadWebhooks();
-  });
-}
-
-function whDelete(id) {
-  if (!confirm('Delete webhook ' + id + '?')) return;
-  authFetch('/api/webhooks/' + id, { method: 'DELETE' })
-    .then(function(){ loadWebhooks(); });
-}
-
-function whTest(id) {
-  // Look up the hook to get its url + secret, then fire a test ping.
-  authFetch('/api/webhooks').then(function(d){
-    var hooks = (d && d.webhooks) || [];
-    var h = hooks.filter(function(x){ return x.id === id; })[0];
-    if (!h) { alert('Webhook not found'); return; }
-    authFetch('/api/webhooks/test', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: h.url, secret: h.secret || '' })
-    }).then(function(){ loadWebhooks(); });
-  });
 }
 
 </script>
