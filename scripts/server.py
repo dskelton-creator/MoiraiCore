@@ -50,7 +50,60 @@ try:
 except Exception:  # pragma: no cover - optional module
     _HAS_OPENAI_OAUTH = False
 
+# First-run system configuration (setup wizard).
+try:
+    import setup as _setup_mod
+    _HAS_SETUP = True
+except Exception:  # pragma: no cover - optional module
+    _HAS_SETUP = False
+
+# Google OAuth provider (Sign in with Google, PKCE).
+try:
+    import google_oauth as _google_mod
+    _HAS_GOOGLE_OAUTH = True
+except Exception:  # pragma: no cover - optional module
+    _HAS_GOOGLE_OAUTH = False
+
 _auth_installed = False
+
+
+def _google_callback_html(token_payload, err=None):
+    """Minimal same-origin HTML that hands a Google OAuth result to the SPA.
+
+    Called from the GET /api/auth/google/callback route (Google redirects the
+    browser there). Being same-origin, this page can write directly into
+    localStorage, then reload the app root where the dashboard auth state is
+    picked up. On error it records moirai_oauth_error for the dashboard to show.
+    """
+    import html as _html
+    if token_payload:
+        payload_json = json.dumps(token_payload)
+        script = (
+            "try{"
+            "var d=" + payload_json + ";"
+            "localStorage.setItem('moirai_token', d.token);"
+            "localStorage.setItem('moirai_user', JSON.stringify({"
+            "  username:d.username, display_name:d.display_name, role:d.role}));"
+            "localStorage.removeItem('moirai_oauth_error');"
+            "}catch(e){localStorage.setItem('moirai_oauth_error', String(e));}"
+            "window.location.href='/';"
+        )
+        title = "Signed in with Google"
+    else:
+        msg = _html.escape(err or "Google sign-in failed")
+        escaped = json.dumps({"message": msg})
+        script = (
+            "try{localStorage.setItem('moirai_oauth_error', "
+            + escaped + ".message);}catch(e){}"
+            "window.location.href='/';"
+        )
+        title = "Google sign-in error"
+    return (
+        "<!doctype html><html><head><meta charset=\"utf-8\"><title>" + title
+        + "</title></head><body><noscript><p>Redirecting…</p></noscript>"
+        "<script>" + script + "</script></body></html>"
+    )
+
 
 PORT = int(sys.argv[sys.argv.index("--port") + 1]) if "--port" in sys.argv else 7878
 
@@ -881,6 +934,73 @@ class Handler(http.server.BaseHTTPRequestHandler):
             status = bridge_status()
             status["available"] = True
             _json(self, {"ok": True, **status})
+            return
+
+        # ── SETUP (first-run system configuration, public) ──
+        if p.path == "/api/setup/status":
+            if not _HAS_SETUP:
+                _json(self, {"ok": False, "needs_onboarding": False,
+                             "available": False})
+                return
+            st = _setup_mod.status()
+            _json(self, {"ok": True, "available": True, **st})
+            return
+
+        # ── GOOGLE OAUTH (public, pre-login) ──
+        if p.path == "/api/auth/google/status":
+            if not _HAS_GOOGLE_OAUTH:
+                _json(self, {"ok": False, "available": False,
+                             "message": "google_oauth module not available"})
+                return
+            _json(self, {"ok": True, **(_google_mod.status())})
+            return
+
+        if p.path == "/api/auth/google/start":
+            if not _HAS_GOOGLE_OAUTH:
+                _json(self, {"ok": False, "error": "google_oauth_unavailable"})
+                return
+            q = parse_qs(urlparse(p.path).query)
+            redirect_uri = (q.get("redirect_uri") or [None])[0] or \
+                           f"http://localhost:{PORT}/api/auth/google/callback"
+            try:
+                flow = _google_mod.begin(redirect_uri)
+                _json(self, {"ok": True, "auth_url": flow["auth_url"],
+                             "state": flow["state"], "redirect_uri": redirect_uri})
+            except Exception as e:
+                _json(self, {"ok": False, "error": str(e)})
+            return
+
+        if p.path.startswith("/api/auth/google/callback"):
+            if not _HAS_GOOGLE_OAUTH:
+                self.send_error(503, "google_oauth unavailable")
+                return
+            q = parse_qs(urlparse(p.path).query)
+            code = (q.get("code") or [None])[0]
+            state = (q.get("state") or [None])[0]
+            redirect_uri = f"http://localhost:{PORT}/api/auth/google/callback"
+            err = None
+            result = None
+            try:
+                if not code:
+                    raise ValueError("missing authorization code")
+                result = _google_mod.callback(code, state, redirect_uri, _auth)
+            except Exception as e:  # noqa: BLE001 - surface as JSON/error page
+                err = str(e)
+            token_payload = None
+            if result:
+                token_payload = {
+                    "token": result.get("access_token"),
+                    "display_name": (result.get("user") or {}).get("display_name"),
+                    "username": (result.get("user") or {}).get("username"),
+                    "role": (result.get("user") or {}).get("role"),
+                }
+            html = _google_callback_html(token_payload, err)
+            body = html.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
             return
 
         if p.path.startswith("/api/projects/") and p.path.endswith("/state"):
@@ -4645,7 +4765,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         if p.path == "/api/auth/openai/disconnect":
             if not _HAS_OPENAI_OAUTH:
-                self._send_json(503, {"error": "openai_oauth_unavailable"})
+                _json(self, {"ok": False, "error": "openai_oauth_unavailable"})
                 return
             try:
                 self._require_auth()
@@ -4653,9 +4773,99 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return
             try:
                 result = disconnect()
-                self._send_json(200, {"ok": True, **result})
+                _json(self, {"ok": True, **result})
             except Exception as e:
-                self._send_json(500, {"error": "disconnect_failed", "message": str(e)})
+                _json(self, {"ok": False, "error": str(e)})
+            return
+
+        # ── SETUP (first-run system configuration, auth) ──
+        if p.path == "/api/setup/complete":
+            try:
+                self._require_auth()
+            except ValueError:
+                return
+            length = int(self.headers.get("Content-Length", 0))
+            try:
+                body = json.loads(self.rfile.read(length)) if length > 0 else {}
+            except Exception:
+                self.send_error(400, "Invalid JSON")
+                return
+            if not _HAS_SETUP:
+                _json(self, {"ok": False, "error": "setup_unavailable"})
+                return
+            try:
+                saved = _setup_mod.complete(body if isinstance(body, dict) else None)
+                _json(self, {"ok": True, "onboarded": True,
+                             "organization_name": saved.get("organization_name")})
+            except Exception as e:
+                _json(self, {"ok": False, "error": str(e)})
+            return
+
+        if p.path == "/api/setup/skip":
+            try:
+                self._require_auth()
+            except ValueError:
+                return
+            if not _HAS_SETUP:
+                _json(self, {"ok": False, "error": "setup_unavailable"})
+                return
+            try:
+                saved = _setup_mod.skip()
+                _json(self, {"ok": True, "onboarded": bool(saved.get("onboarded"))})
+            except Exception as e:
+                _json(self, {"ok": False, "error": str(e)})
+            return
+
+        # Configure Google OAuth (client_id). On a fresh instance (no users yet)
+        # this is allowed without auth so "Sign in with Google" can bootstrap the
+        # first admin; once accounts exist it requires an authenticated admin.
+        if p.path == "/api/setup/google":
+            is_fresh = (not _HAS_SETUP) or (not _setup_mod.has_users())
+            if not is_fresh:
+                try:
+                    self._require_auth()
+                except ValueError:
+                    return
+            length = int(self.headers.get("Content-Length", 0))
+            try:
+                body = json.loads(self.rfile.read(length)) if length > 0 else {}
+            except Exception:
+                self.send_error(400, "Invalid JSON")
+                return
+            cid = (body.get("client_id") or "").strip()
+            enabled = bool(body.get("enabled", True))
+            if not _HAS_GOOGLE_OAUTH:
+                _json(self, {"ok": False, "error": "google_oauth_unavailable"})
+                return
+            try:
+                st = _google_mod.set_config(cid, enabled)
+                # Mirror into the system manifest too.
+                if _HAS_SETUP:
+                    cfg = _setup_mod.load_config()
+                    cfg["google_oauth"] = {"enabled": enabled, "client_id": cid}
+                    _setup_mod.save_config(cfg)
+                _json(self, {"ok": True, **st})
+            except Exception as e:
+                _json(self, {"ok": False, "error": str(e)})
+            return
+
+        if p.path == "/api/auth/google/disconnect":
+            try:
+                self._require_auth()
+            except ValueError:
+                return
+            if not _HAS_GOOGLE_OAUTH:
+                _json(self, {"ok": False, "error": "google_oauth_unavailable"})
+                return
+            try:
+                st = _google_mod.clear()
+                if _HAS_SETUP:
+                    cfg = _setup_mod.load_config()
+                    cfg["google_oauth"] = {"enabled": False, "client_id": ""}
+                    _setup_mod.save_config(cfg)
+                _json(self, {"ok": True, **st})
+            except Exception as e:
+                _json(self, {"ok": False, "error": str(e)})
             return
 
         self.send_error(405)

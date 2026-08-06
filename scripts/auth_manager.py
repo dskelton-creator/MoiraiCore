@@ -166,6 +166,49 @@ class AuthManager:
             "expires_in": ACCESS_TOKEN_TTL,
         }
 
+    def google_login(self, email: str, name: str, sub: Optional[str] = None) -> dict:
+        """Find-or-create a Google-linked user and return a full token response.
+
+        Used by the "Sign in with Google" path. If a local account already
+        exists with this email (created manually), it is reused. If not, a new
+        account is created with an unusable random password (the user signs in
+        via Google, not a password). The first account overall becomes admin.
+        """
+        email = (email or "").strip().lower()
+        if not email:
+            raise ValueError("google email missing")
+        user = self._users.get(email)
+        if not user:
+            role = "admin" if not self._users else "user"
+            self.create_user(email, secrets.token_urlsafe(24), role=role,
+                             display_name=name or email)
+            user = self._users[email]
+        else:
+            user["last_login"] = time.time()
+            save_json(USERS_FILE, self._users)
+        if sub:
+            user["google_sub"] = sub
+            save_json(USERS_FILE, self._users)
+        log("google_login", email)
+        try:
+            from audit import audit_log
+            audit_log("auth.google_login", user=email, status="success")
+        except ImportError:
+            pass
+        tokens = self._issue_tokens(user)
+        return {
+            "access_token": tokens["access_token"],
+            "refresh_token": tokens["refresh_token"],
+            "token_type": "Bearer",
+            "expires_in": ACCESS_TOKEN_TTL,
+            "user": {
+                "id": user["id"],
+                "username": user["username"],
+                "role": user["role"],
+                "display_name": user["display_name"],
+            },
+        }
+
     def logout(self, access_token: str):
         """Revoke a session by blacklisting the token jti."""
         try:

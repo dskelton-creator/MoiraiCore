@@ -494,6 +494,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-
       <a class="nav-item sub" data-view="audit" onclick="go('audit',this)"><span class="icon">🛡</span> Audit Trail</a>
       <a class="nav-item sub" data-view="pipeline" onclick="go('pipeline',this)"><span class="icon">🔗</span> Pipeline</a>
       <a class="nav-item sub" data-view="tier3" onclick="go('tier3',this)"><span class="icon">🔺</span> 3-Tier Pipeline</a>
+      <a class="nav-item sub" onclick="setupOpenEdit()"><span class="icon">🔑</span> Setup & SSO</a>
     </div>
 
     <div style="margin-top:auto;padding:10px">
@@ -3851,6 +3852,7 @@ async function sendNoteToHermes() {
 document.addEventListener('DOMContentLoaded', () => {
   setTimeout(function() {
     checkHermesStatus();
+    setupCheck(); // first-run wizard gate (public / setup/status)
     // If user already has a token (page reload), load dashboard data immediately
     const existingToken = localStorage.getItem('moirai_token');
     if (existingToken) {
@@ -4317,6 +4319,11 @@ if (window.ResizeObserver) { var gro = new ResizeObserver(function() { if (graph
       <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Password</label>
       <input id="auth-password" type="password" autocomplete="current-password" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:14px;outline:none;margin-bottom:16px" placeholder="Enter password">
       <button onclick="authDoLogin()" class="btn primary" style="width:100%;padding:10px;font-size:14px">Sign In</button>
+      <div style="display:flex;align-items:center;gap:10px;margin:12px 0"><div style="flex:1;height:1px;background:var(--border)"></div><span style="font-size:11px;color:var(--text-dim)">or</span><div style="flex:1;height:1px;background:var(--border)"></div></div>
+      <button id="auth-google-btn" onclick="authGoogleLogin()" class="btn" style="width:100%;padding:10px;font-size:14px;display:flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--border);background:var(--bg)">
+        <span style="font-size:16px;font-weight:700;color:#4285F4">G</span> Continue with Google
+      </button>
+      <p id="auth-google-error" style="color:var(--red);font-size:12px;margin-top:8px;display:none"></p>
       <p id="auth-login-error" style="color:var(--red);font-size:12px;margin-top:8px;display:none"></p>
       <p style="color:var(--text-dim);font-size:12px;margin-top:12px;text-align:center">
         No account? <a href="#" onclick="authSwitchTab('register');return false" style="color:var(--accent)">Register</a>
@@ -4381,6 +4388,88 @@ if (window.ResizeObserver) { var gro = new ResizeObserver(function() { if (graph
   </div>
 </div>
 
+<!-- ═══ SETUP WIZARD (first-run system configuration) ═══ -->
+<div id="setup-wizard" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:10010;align-items:center;justify-content:center;overflow:auto;padding:24px">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px;width:520px;max-width:94vw;max-height:92vh;overflow-y:auto;text-align:left">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <span style="font-size:22px;font-weight:700">🚀 Set up MoiraiCore</span>
+      <span id="setup-step-label" style="font-size:12px;color:var(--text-dim)"></span>
+    </div>
+    <p style="color:var(--text-dim);font-size:12px;line-height:1.5;margin-bottom:14px">Mission Control runs entirely on this machine. Your data never leaves it.</p>
+    <div style="display:flex;gap:6px;margin-bottom:20px">
+      <span id="setup-dot-1" class="welcome-dot active"></span>
+      <span id="setup-dot-2" class="welcome-dot"></span>
+      <span id="setup-dot-3" class="welcome-dot"></span>
+    </div>
+
+    <!-- STEP 1: Admin account -->
+    <div id="setup-step-1" style="display:block">
+      <h3 style="font-size:16px;font-weight:700;margin-bottom:6px">Create your admin account</h3>
+      <p style="color:var(--text-dim);font-size:12px;margin-bottom:14px">The first account is the administrator. Choose manual sign-in or enable Google so your team can sign in with their Google accounts.</p>
+      <div id="setup-google-configured" style="display:none;margin-bottom:14px"></div>
+      <div id="setup-google-setup" style="margin-bottom:14px">
+        <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Google OAuth Client ID (optional — enables "Sign in with Google")</label>
+        <input id="setup-google-cid" type="text" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:14px;outline:none;margin-bottom:8px" placeholder="xxx.apps.googleusercontent.com">
+        <button class="btn" onclick="setupSaveGoogle()" style="font-size:12px;padding:7px 14px">💾 Save & Enable Google</button>
+        <p id="setup-google-msg" style="color:var(--text-dim);font-size:12px;margin-top:6px"></p>
+      </div>
+      <div id="setup-or-divider" style="display:flex;align-items:center;gap:10px;margin:6px 0 14px"><div style="flex:1;height:1px;background:var(--border)"></div><span style="font-size:11px;color:var(--text-dim)">or create with email & password</span><div style="flex:1;height:1px;background:var(--border)"></div></div>
+      <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Username</label>
+      <input id="setup-admin-user" type="text" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:14px;outline:none;margin-bottom:12px" placeholder="e.g. admin">
+      <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Display name</label>
+      <input id="setup-admin-display" type="text" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:14px;outline:none;margin-bottom:12px" placeholder="Your name">
+      <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Password <span style="color:var(--text-dim)">(min 8 characters)</span></label>
+      <input id="setup-admin-pass" type="password" autocomplete="new-password" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:14px;outline:none;margin-bottom:8px" placeholder="Min 8 characters">
+      <p id="setup-admin-error" style="color:var(--red);font-size:12px;display:none;margin-bottom:8px"></p>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" onclick="setupSkipNow()">Skip</button>
+        <button class="btn primary" onclick="setupCreateAdmin()">Create admin & continue →</button>
+      </div>
+    </div>
+
+    <!-- STEP 2: System configuration -->
+    <div id="setup-step-2" style="display:none">
+      <h3 style="font-size:16px;font-weight:700;margin-bottom:6px">Configure your system</h3>
+      <p style="color:var(--text-dim);font-size:12px;margin-bottom:14px">These defaults drive the agent pipeline. You can change any of them later in Settings.</p>
+      <div style="display:flex;gap:10px;margin-bottom:12px">
+        <div style="flex:1"><label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Organization / instance name</label>
+        <input id="setup-org" type="text" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;outline:none" placeholder="MoiraiCore"></div>
+        <div style="flex:1"><label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Workspace (output) directory</label>
+        <input id="setup-ws" type="text" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;outline:none" placeholder="workspace"></div>
+      </div>
+      <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Tier 1 (default / general) model</label>
+      <input id="setup-t1" type="text" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;outline:none;margin-bottom:12px" placeholder="hermes">
+      <div style="display:flex;gap:10px;margin-bottom:12px">
+        <div style="flex:1"><label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Tier 2 provider</label>
+        <select id="setup-t2p" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;color:var(--text);font-size:13px;outline:none">
+          <option value="openai">OpenAI-compatible (OpenRouter)</option>
+          <option value="gemini">Gemini (native)</option>
+        </select></div>
+        <div style="flex:1"><label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Tier 2 model</label>
+        <input id="setup-t2m" type="text" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;outline:none" placeholder="deepseek/deepseek-v4-flash-0731"></div>
+      </div>
+      <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Tier 2 base URL</label>
+      <input id="setup-t2u" type="text" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;outline:none;margin-bottom:12px" placeholder="https://openrouter.ai/api/v1">
+      <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Tier 3 local Ollama model</label>
+      <input id="setup-t3" type="text" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;outline:none;margin-bottom:16px" placeholder="qwen2.5-coder:14b">
+      <p id="setup-config-msg" style="color:var(--text-dim);font-size:12px;display:none;margin-bottom:8px"></p>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" onclick="setupPrev(2)">← Back</button>
+        <button class="btn" onclick="setupSkipNow()">Skip</button>
+        <button class="btn primary" onclick="setupSaveSystem()">Save configuration</button>
+      </div>
+    </div>
+
+    <!-- STEP 3: Complete -->
+    <div id="setup-step-3" style="display:none;text-align:center">
+      <div style="font-size:44px;margin-bottom:10px">🎉</div>
+      <h3 style="font-size:18px;font-weight:700;margin-bottom:8px">You're all set</h3>
+      <p style="color:var(--text-dim);font-size:13px;line-height:1.6;margin-bottom:20px">MoiraiCore is configured. Head to <strong>Mission Control</strong> to create goals, coordinate agents, and explore the dashboard.</p>
+      <button class="btn primary" onclick="setupFinish()" style="padding:11px 22px">Launch Mission Control →</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ── Welcome Wizard ──
 (function(){
@@ -4401,6 +4490,211 @@ if (window.ResizeObserver) { var gro = new ResizeObserver(function() { if (graph
   window.welcomeSkip = function() { localStorage.setItem('moirai_welcome_done', '1'); document.getElementById('welcome-wizard').style.display = 'none'; };
   window.welcomeFinish = function() { localStorage.setItem('moirai_welcome_done', '1'); document.getElementById('welcome-wizard').style.display = 'none'; go('dashboard'); };
 })();
+// ═══ SETUP WIZARD (first-run system configuration) ═══
+let _setupSys = null;
+let _setupLoaded = false;
+
+function setupVal(id) {
+  const el = document.getElementById(id);
+  return el ? el.value.trim() : '';
+}
+function setupShowStep(n) {
+  for (let i = 1; i <= 3; i++) {
+    const el = document.getElementById('setup-step-' + i);
+    if (el) el.style.display = (i === n) ? 'block' : 'none';
+    const dot = document.getElementById('setup-dot-' + i);
+    if (dot) dot.classList.toggle('active', i === n);
+  }
+  const lbl = document.getElementById('setup-step-label');
+  if (lbl) lbl.textContent = {1: 'Step 1 of 3 · Account', 2: 'Step 2 of 3 · System', 3: 'Done'}[n] || '';
+}
+function setupNext(from) { setupShowStep(from + 1); }
+function setupPrev(from) { setupShowStep(from - 1); }
+
+function setupPrefill() {
+  const s = _setupSys || {};
+  const m = s.model || {};
+  const set = (id, v, def) => { const el = document.getElementById(id); if (el) el.value = (v === undefined || v === null || v === '') ? def : v; };
+  set('setup-org', s.organization_name, 'MoiraiCore');
+  set('setup-ws', s.workspace, 'workspace');
+  set('setup-t1', m.tier1, 'hermes');
+  set('setup-t2m', m.tier2_model, 'deepseek/deepseek-v4-flash-0731');
+  set('setup-t2u', m.tier2_base_url, 'https://openrouter.ai/api/v1');
+  set('setup-t3', m.tier3_model, 'qwen2.5-coder:14b');
+  const t2p = document.getElementById('setup-t2p');
+  if (t2p) t2p.value = (m.tier2_provider === 'gemini') ? 'gemini' : 'openai';
+  const g = s.google_oauth || {};
+  const cidEl = document.getElementById('setup-google-cid');
+  if (cidEl && g.client_id) cidEl.value = g.client_id;
+}
+
+async function setupRefreshGoogleUI() {
+  try {
+    const r = await fetch(API + '/auth/google/status');
+    const d = await r.json();
+    const configured = !!(d && d.configured);
+    const boxOn = document.getElementById('setup-google-configured');
+    const boxOff = document.getElementById('setup-google-setup');
+    if (boxOn && boxOff) {
+      if (configured) {
+        boxOn.style.display = 'block';
+        boxOn.innerHTML =
+          '<button class="btn" onclick="setupGoogleLogin()" style="width:100%;padding:11px;display:flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--border);background:var(--bg)"><span style="font-size:16px;font-weight:700;color:#4285F4">G</span> Continue with Google</button>' +
+          '<p style="color:var(--text-dim);font-size:11px;margin-top:6px">Google sign-in ready (' + (d.client_id_masked || 'configured') + ')</p>';
+        boxOff.style.display = 'none';
+        document.getElementById('setup-or-divider').style.display = 'flex';
+      } else {
+        boxOn.style.display = 'none';
+        boxOff.style.display = 'block';
+        document.getElementById('setup-or-divider').style.display = 'flex';
+      }
+    }
+  } catch (e) {}
+}
+
+function setupOpen(mode) {
+  _setupMode = mode || 'first';
+  document.getElementById('setup-wizard').style.display = 'flex';
+  if (!_setupLoaded) { setupPrefill(); _setupLoaded = true; }
+  setupRefreshGoogleUI();
+  if (authToken) {
+    // already signed in — skip the account step
+    document.getElementById('setup-step-1').style.display = 'none';
+    document.getElementById('setup-dot-1').style.display = 'none';
+    document.getElementById('setup-step-label').textContent = 'Step 2 of 2 · System';
+    setupShowStep(2);
+  } else {
+    setupShowStep(1);
+  }
+}
+function setupOpenEdit() {
+  setupOpen('edit');
+}
+function setupHide() {
+  document.getElementById('setup-wizard').style.display = 'none';
+  localStorage.setItem('moirai_setup_done', '1');
+}
+
+async function setupCreateAdmin() {
+  const u = setupVal('setup-admin-user');
+  const dn = setupVal('setup-admin-display');
+  const p = document.getElementById('setup-admin-pass').value;
+  const err = document.getElementById('setup-admin-error');
+  err.style.display = 'none';
+  if (!u || !p) { err.textContent = 'Username and password are required.'; err.style.display = 'block'; return; }
+  const result = await authRegister(u, p, dn);
+  if (!result || !result.ok) {
+    err.textContent = (result && result.message) || 'Registration failed';
+    err.style.display = 'block';
+    return;
+  }
+  setupShowStep(2);
+}
+
+async function setupSaveGoogle() {
+  const cid = setupVal('setup-google-cid');
+  const msg = document.getElementById('setup-google-msg');
+  msg.style.display = 'none';
+  if (!cid) { msg.textContent = 'Enter your Google OAuth Client ID to enable Sign in with Google.'; msg.style.display = 'block'; return; }
+  try {
+    const headers = {'Content-Type': 'application/json'};
+    if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+    const r = await fetch(API + '/setup/google', {method: 'POST', headers: headers, body: JSON.stringify({client_id: cid, enabled: true})});
+    const d = await r.json();
+    if (d.ok) { msg.style.color = 'var(--text-dim)'; msg.textContent = 'Saved. "Continue with Google" is now available.'; msg.style.display = 'block'; setupRefreshGoogleUI(); }
+    else { msg.style.color = 'var(--red)'; msg.textContent = d.error || 'Could not save'; msg.style.display = 'block'; }
+  } catch (e) { msg.style.color = 'var(--red)'; msg.textContent = 'Network error'; msg.style.display = 'block'; }
+}
+
+function setupGoogleLogin() {
+  const redirect = window.location.origin + '/api/auth/google/callback';
+  localStorage.setItem('moirai_setup_google', '1');
+  fetch(API + '/auth/google/start?redirect_uri=' + encodeURIComponent(redirect))
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if (d && d.auth_url) window.location.href = d.auth_url; else { const msg=document.getElementById('setup-google-msg'); if(msg){msg.style.color='var(--red)';msg.textContent=(d&&d.error)||'Could not start Google sign-in';msg.style.display='block';} } })
+    .catch(function(){});
+}
+function authGoogleLogin() {
+  const err = document.getElementById('auth-google-error');
+  err.style.display = 'none';
+  fetch(API + '/auth/google/status')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!(d && d.configured)) {
+        err.textContent = 'Google sign-in is not configured yet. Sign in with your password, then enable it in Settings → Setup & SSO.';
+        err.style.display = 'block';
+        return;
+      }
+      const redirect = window.location.origin + '/api/auth/google/callback';
+      return fetch(API + '/auth/google/start?redirect_uri=' + encodeURIComponent(redirect));
+    })
+    .then(function(r){ if (r) return r.json(); })
+    .then(function(d){
+      if (d && d.auth_url) window.location.href = d.auth_url;
+      else if (d) { err.textContent = d.error || 'Could not start Google sign-in'; err.style.display = 'block'; }
+    })
+    .catch(function(){});
+}
+
+async function setupSaveSystem() {
+  const msg = document.getElementById('setup-config-msg');
+  msg.style.display = 'none';
+  const g = document.getElementById('setup-google-cid') ? setupVal('setup-google-cid') : '';
+  const body = {
+    organization_name: setupVal('setup-org'),
+    workspace: setupVal('setup-ws'),
+    model: {
+      tier1: setupVal('setup-t1'),
+      tier2_provider: (document.getElementById('setup-t2p') || {}).value || 'openai',
+      tier2_model: setupVal('setup-t2m'),
+      tier2_base_url: setupVal('setup-t2u'),
+      tier3_model: setupVal('setup-t3')
+    },
+    google_oauth: { enabled: !!g, client_id: g }
+  };
+  try {
+    const r = await authFetch('/setup/complete', {method: 'POST', body: JSON.stringify(body), headers: {'Content-Type': 'application/json'}});
+    const d = await r.json();
+    if (d.ok) { setupShowStep(3); }
+    else { msg.style.color = 'var(--red)'; msg.textContent = d.error || 'Could not save configuration'; msg.style.display = 'block'; }
+  } catch (e) { msg.style.color = 'var(--red)'; msg.textContent = 'Network error'; msg.style.display = 'block'; }
+}
+
+function setupFinish() {
+  localStorage.setItem('moirai_setup_done', '1');
+  document.getElementById('setup-wizard').style.display = 'none';
+  if (!authToken) { authShowLogin(); return; }
+  location.reload();
+}
+function setupSkipNow() {
+  localStorage.setItem('moirai_setup_done', '1');
+  document.getElementById('setup-wizard').style.display = 'none';
+  if (!authToken) authShowLogin();
+}
+
+async function setupCheck() {
+  try {
+    const r = await fetch(API + '/setup/status');
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d && d.system) _setupSys = d.system;
+    const returningFromGoogle = localStorage.getItem('moirai_setup_google');
+    if (returningFromGoogle) {
+      localStorage.removeItem('moirai_setup_google');
+      // If onboarding hasn't finished and we're signed in (Google created the
+      // account), resume the wizard at the system-configuration step.
+      if (!d.onboarded && authToken && !localStorage.getItem('moirai_setup_done')) {
+        setupOpen('first');
+        return;
+      }
+    }
+    // Show the wizard on a fresh instance until the user finishes or skips it.
+    if (d && !d.onboarded && !localStorage.getItem('moirai_setup_done')) {
+      setupOpen('first');
+    }
+  } catch (e) {}
+}
+
 // ═══ PROJECTS ═══
 let _projectCurrent = null;
 let _projectTab = 'goals';

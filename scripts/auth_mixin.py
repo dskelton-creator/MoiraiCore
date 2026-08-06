@@ -60,6 +60,7 @@ def install_auth(handler_cls):
         public_prefixes = (
             "/api/auth/",
             "/api/auth/openai/status",  # public: dashboard polls connection state pre-login
+            "/api/setup/",              # public: first-run wizard gate (GET /api/setup/status)
             "/api/health",
             "/api/stats",
             "/api/projects/tasks/graph",  # Task dependency graph (public)

@@ -34,6 +34,26 @@ python3 scripts/server.py --port 7878
 # open http://localhost:7878
 ```
 
+### First-run setup (onboarding wizard)
+
+On first launch, MoiraiCore shows a **setup wizard** that walks you through:
+
+1. **Create your admin account** — either a local username + password, or
+   "Sign in with Google". To enable Google sign-in, create an OAuth 2.0 client
+   of type *Web application* in the [Google Cloud console][gcp] with an
+   **Authorized redirect URI** of `http://localhost:<port>/api/auth/google/callback`,
+   then paste its Client ID into the wizard (the public id is all that's
+   needed — PKCE is used, no secret). The first account becomes the admin.
+2. **System configuration** — instance name, workspace directory, and the
+   default Tier 1 / Tier 2 / Tier 3 models that drive the agent pipeline.
+3. **Done** — configuration is saved to `config/system.json` and Mission Control
+   opens.
+
+Returning users can reach the same screen later via **Settings → Setup & SSO**.
+Google sign-in is available on the login screen whenever a Client ID is set.
+
+[gcp]: https://console.cloud.google.com/apis/credentials
+
 ### Tier 2 backend configuration
 
 | Variable | Default | Purpose |
