@@ -4654,7 +4654,9 @@ async function setupSaveSystem() {
   };
   try {
     const r = await authFetch('/setup/complete', {method: 'POST', body: JSON.stringify(body), headers: {'Content-Type': 'application/json'}});
-    const d = await r.json();
+    // authFetch already returns the parsed JSON body (it calls res.json()
+    // internally), so r is the data object, NOT a Response — do not call r.json().
+    const d = r || {};
     if (d.ok) { setupShowStep(3); }
     else { msg.style.color = 'var(--red)'; msg.textContent = d.error || 'Could not save configuration'; msg.style.display = 'block'; }
   } catch (e) { msg.style.color = 'var(--red)'; msg.textContent = 'Network error'; msg.style.display = 'block'; }
