@@ -512,9 +512,11 @@ class GoalEngine:
         skipped = 0
 
         # ── Session persistence: track session_id per agent for conversation continuity ──
-        agent_sessions = {}  # agent -> session_id
-        goal_session_map = goal.get("agent_sessions", {})  # restore from checkpoint
-        agent_sessions.update(goal_session_map)
+        # Fix (Option A): start each goal run with a FRESH session map. We deliberately do NOT
+        # restore agent_sessions from the persisted goal/checkpoint — reusing a prior run's
+        # conversation state makes a re-run "come back with stale attempts" instead of fresh work.
+        # Continuity now only exists WITHIN a single run (sessions accumulate as tasks execute).
+        agent_sessions = {}  # agent -> session_id (fresh per run)
 
         for task in goal_tasks:
             # Support both kanban card format (id) and goal engine format (task_id)
