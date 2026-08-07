@@ -4438,7 +4438,7 @@ if (window.ResizeObserver) { var gro = new ResizeObserver(function() { if (graph
         <input id="setup-ws" type="text" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;outline:none" placeholder="workspace"></div>
       </div>
       <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Tier 1 (default / general) model</label>
-      <input id="setup-t1" type="text" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;outline:none;margin-bottom:12px" placeholder="hermes">
+      <input id="setup-t1" type="text" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;outline:none;margin-bottom:12px" placeholder="owl-alpha">
       <div style="display:flex;gap:10px;margin-bottom:12px">
         <div style="flex:1"><label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Tier 2 provider</label>
         <select id="setup-t2p" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;color:var(--text);font-size:13px;outline:none">
@@ -4517,7 +4517,7 @@ function setupPrefill() {
   const set = (id, v, def) => { const el = document.getElementById(id); if (el) el.value = (v === undefined || v === null || v === '') ? def : v; };
   set('setup-org', s.organization_name, 'MoiraiCore');
   set('setup-ws', s.workspace, 'workspace');
-  set('setup-t1', m.tier1, 'hermes');
+  set('setup-t1', m.tier1, 'owl-alpha');
   set('setup-t2m', m.tier2_model, 'deepseek/deepseek-v4-flash-0731');
   set('setup-t2u', m.tier2_base_url, 'https://openrouter.ai/api/v1');
   set('setup-t3', m.tier3_model, 'qwen2.5-coder:14b');
