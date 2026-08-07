@@ -33,7 +33,7 @@ DEFAULTS: dict[str, Any] = {
     "owner_email": "",           # optional; set by Google OAuth or manual entry
     "workspace": "workspace",    # relative to AGENT_OS_ROOT unless absolute
     "model": {
-        "tier1": "owl-alpha",                   # default/fallback director (Tier 1 / general)
+        "tier1": "director",                    # default Tier 1 / general role (informational)
         "tier2_provider": "openai",               # openai | gemini
         "tier2_model": "deepseek/deepseek-v4-flash-0731",
         "tier2_base_url": "https://openrouter.ai/api/v1",

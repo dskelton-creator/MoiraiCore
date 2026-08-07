@@ -37,7 +37,7 @@ class SetupConfigTest(unittest.TestCase):
         self.assertEqual(saved["organization_name"], "Acme")
         self.assertEqual(saved["model"]["tier2_provider"], "gemini")
         # Deep-merge preserved the other defaults.
-        self.assertEqual(saved["model"]["tier1"], "owl-alpha")
+        self.assertEqual(saved["model"]["tier1"], "director")
         st = setup.status()
         self.assertFalse(st["needs_onboarding"])
         self.assertTrue(st["configured"])
