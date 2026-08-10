@@ -920,12 +920,64 @@ class GoalEngine:
         thread.start()
         return task_id
 
+    def _reconcile_goal_status(self, goal_id):
+        """Recompute a goal's persisted status from its actual kanban task
+        outcomes, cleaning up stale 'in_progress'/'partial' records left behind
+        by interrupted or killed runs.
+
+        Idempotent: only persists when the derived state differs from what is on
+        disk, so neutral reads never churn the file. Returns the (possibly
+        updated) goal dict, or None if the goal is not found.
+        """
+        try:
+            goals = load_goals()
+            goal = next((g for g in goals if g["id"] == goal_id), None)
+            if goal is None:
+                return None
+            kanban = load_kanban()
+            tasks = [
+                t
+                for lane in ("backlog", "progress", "done")
+                for t in kanban.get(lane, [])
+                if t.get("goal_id") == goal_id
+            ]
+            total = len(tasks)
+            done = sum(1 for t in tasks if t.get("status") == "done")
+            failed = sum(
+                1 for t in tasks if t.get("status") in ("failed", "blocked")
+            )
+            if total and done == total:
+                new_status = "completed"
+            elif done or failed:
+                new_status = "partial"
+            else:
+                new_status = "in_progress"
+
+            changed = (
+                goal.get("status") != new_status
+                or goal.get("tasks_completed") != done
+                or goal.get("tasks_failed") != failed
+            )
+            goal["tasks_completed"] = done
+            goal["tasks_failed"] = failed
+            goal["total_tasks"] = total
+            if changed:
+                goal["status"] = new_status
+                goal["updated"] = datetime.now().isoformat()
+                save_goals(goals)
+            return goal
+        except Exception:
+            return None
+
     def get_goal_status(self, goal_id):
         """Get current status of a goal."""
         goals = load_goals()
         goal = next((g for g in goals if g["id"] == goal_id), None)
         if not goal:
             return {"ok": False, "error": "Goal not found"}
+        # Reconcile stale state left by an interrupted run so reads reflect
+        # the real task outcomes (see _reconcile_goal_status).
+        goal = self._reconcile_goal_status(goal_id) or goal
         return {"ok": True, "goal": goal}
 
     def synthesize_goal(self, goal_id):
@@ -1072,6 +1124,10 @@ def main():
     p_status = sub.add_parser("status", help="Show goal status")
     p_status.add_argument("goal_id", help="Goal ID")
 
+    # finalize — reconcile goal state from task outcomes (cleanup interrupted runs)
+    p_finalize = sub.add_parser("finalize", help="Reconcile goal status from task state")
+    p_finalize.add_argument("goal_id", help="Goal ID")
+
     # synthesize
     p_synth = sub.add_parser("synthesize", help="Synthesize final report")
     p_synth.add_argument("goal_id", help="Goal ID")
@@ -1099,6 +1155,10 @@ def main():
     elif args.command == "status":
         result = engine.get_goal_status(args.goal_id)
         print(json.dumps(result, indent=2, default=str))
+
+    elif args.command == "finalize":
+        result = engine._reconcile_goal_status(args.goal_id)
+        print(json.dumps(result if result else {"ok": False, "error": "Goal not found"}, indent=2, default=str))
 
     elif args.command == "synthesize":
         result = engine.synthesize_goal(args.goal_id)
