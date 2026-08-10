@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MoiraiCore — Local-first, provider-agnostic AI orchestration</title>
+<meta name="description" content="MoiraiCore is a self-hosted, local-first AI orchestration platform for solo developers and small teams. Your models, your data, your machine. Open source (MIT), provider-agnostic, with a governed 3-tier agent pipeline and ScrumGate enforcement.">
+<style>
+:root{
+  --bg:#0a0a0f; --surface:#12121a; --surface2:#1a1a26; --border:#2a2a3a;
+  --text:#e4e4ef; --text-dim:#8888a0; --accent:#7c5bf5; --accent2:#5b9bf5;
+  --green:#4ade80; --yellow:#fbbf24; --red:#f87171; --cyan:#22d3ee; --orange:#fb923c;
+  --radius:14px;
+  --mono:'SF Mono','Fira Code',Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',Roboto,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+a{color:var(--accent2);text-decoration:none}
+a:hover{color:var(--text)}
+code,pre{font-family:var(--mono)}
+h2.kicker{font-family:var(--mono);font-size:12.5px;color:var(--accent2);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px}
+
+/* ── Nav ── */
+nav{position:sticky;top:0;z-index:50;background:rgba(10,10,15,.85);backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
+.nav-inner{display:flex;align-items:center;justify-content:space-between;height:64px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.2px}
+.brand .dot{width:12px;height:12px;border-radius:3px;background:var(--accent);box-shadow:0 0 0 4px rgba(124,91,245,.22)}
+.nav-links{display:flex;gap:26px;font-size:14px}
+.nav-links a{color:var(--text-dim)}
+.nav-links a:hover{color:var(--text)}
+.btn{display:inline-block;padding:10px 18px;border-radius:10px;font-weight:600;font-size:14px;border:1px solid var(--border);color:var(--text);background:var(--surface2);transition:.15s;cursor:pointer}
+.btn:hover{color:var(--text);border-color:var(--accent)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-primary:hover{background:#8b6dff;color:#fff}
+
+/* ── Hero ── */
+.hero{padding:96px 0 64px;border-bottom:1px solid var(--border);
+  background:radial-gradient(900px 420px at 15% -10%,rgba(124,91,245,.16),transparent 60%),
+             radial-gradient(700px 380px at 90% 0%,rgba(34,211,238,.09),transparent 60%)}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12.5px;color:var(--green);letter-spacing:.5px;border:1px solid rgba(74,222,128,.3);padding:6px 14px;border-radius:999px;margin-bottom:26px}
+.hero h1{font-size:clamp(34px,5.4vw,60px);line-height:1.05;letter-spacing:-.02em;font-weight:800;max-width:860px}
+.hero h1 .muted{color:var(--text-dim)}
+.hero h1 .accent{color:var(--accent2)}
+.hero .lede{font-size:clamp(16px,2vw,19px);color:var(--text-dim);max-width:720px;margin-top:22px}
+.hero .lede b{color:var(--text)}
+.hero .cta-row{display:flex;gap:14px;margin-top:34px;flex-wrap:wrap;align-items:center}
+.hero .pill-strip{display:flex;gap:10px;flex-wrap:wrap;margin-top:28px}
+.pillar{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12.5px;color:var(--text-dim);border:1px solid var(--border);border-radius:999px;padding:6px 13px;background:var(--surface)}
+.pillar b{color:var(--text);font-weight:600}
+
+/* ── Terminal ── */
+.terminal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-top:52px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.45)}
+.terminal .bar{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:12px;color:var(--text-dim)}
+.terminal .bar .g{width:10px;height:10px;border-radius:50%}
+.terminal pre{padding:20px;font-size:13.5px;overflow-x:auto;color:#cfcfe0;line-height:1.7}
+.terminal .c{color:var(--text-dim)}
+.terminal .gtext{color:var(--green)}
+.terminal .vt{color:var(--accent2)}
+.terminal .yel{color:var(--yellow)}
+.terminal .red{color:var(--red)}
+
+/* ── Sections ── */
+section{padding:92px 0;border-bottom:1px solid var(--border)}
+.sec-head{max-width:780px}
+.sec-head h2{font-size:clamp(28px,4vw,42px);font-weight:800;letter-spacing:-.02em;line-height:1.12}
+.sec-head p{font-size:17px;color:var(--text-dim);margin-top:18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:44px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:26px;transition:.15s}
+.card:hover{border-color:var(--accent)}
+.card .mono-tag{font-family:var(--mono);font-size:11.5px;letter-spacing:1px;margin-bottom:12px}
+.card h3{font-size:18.5px;font-weight:700;margin-bottom:10px}
+.card p{font-size:14.6px;color:var(--text-dim)}
+.card ul, .card ol {list-style:none;margin-top:12px;font-size:14px;color:var(--text-dim)}
+.card ul li,.card ol li{padding:4px 0 4px 20px;position:relative}
+.card ul li:before{content:'▸';position:absolute;left:0;color:var(--accent2)}
+.card ol{counter-reset:st}
+.card ol li{counter-increment:st}
+.card ol li:before{content:counter(st);font-family:var(--mono);font-size:12px;color:var(--green);position:absolute;left:0;top:5px}
+.mk-green{color:var(--green)} .mk-blue{color:var(--accent2)} .mk-purple{color:var(--accent)} .mk-cyan{color:var(--cyan)} .mk-yellow{color:var(--yellow)} .mk-orange{color:var(--orange)}
+
+/* ── Principles ── */
+.principle{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px;position:relative;overflow:hidden}
+.principle:hover{border-color:var(--accent)}
+.principle .ico{font-size:26px;margin-bottom:14px}
+.principle h3{font-size:19px;font-weight:700;margin-bottom:10px}
+.principle p{font-size:14.6px;color:var(--text-dim)}
+.principle .arrow{position:absolute;top:26px;right:26px;color:var(--accent);font-family:var(--mono);font-size:15px}
+.principle .tag{display:inline-block;font-family:var(--mono);font-size:11px;margin-top:14px;padding:3px 10px;border-radius:999px;border:1px solid var(--border);color:var(--text-dim)}
+
+/* ── Tiers ── */
+.tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:44px}
+.tier{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:26px;position:relative;overflow:hidden}
+.tier:hover{border-color:var(--accent)}
+.tier .tnum{font-family:var(--mono);font-size:12px;letter-spacing:1px;margin-bottom:12px;display:inline-block;padding:4px 10px;border-radius:8px;border:1px solid var(--border)}
+.tier h3{font-size:19px;font-weight:700;margin-bottom:8px}
+.tier .role{font-family:var(--mono);font-size:12px;color:var(--text-dim);margin-bottom:12px}
+.tier p{font-size:14.4px;color:var(--text-dim)}
+.tier ul{list-style:none;margin-top:12px;font-size:13.8px;color:var(--text-dim)}
+.tier ul li{padding:4px 0 4px 20px;position:relative}
+.tier ul li:before{content:'▸';position:absolute;left:0;color:var(--accent2)}
+.tier .model-box{margin-top:14px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 12px;font-family:var(--mono);font-size:12px;color:var(--text-dim);overflow-x:auto}
+.gate-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:20px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px 22px}
+.gate-row .g-label{font-family:var(--mono);font-size:12px;color:var(--yellow);letter-spacing:1px;white-space:nowrap}
+.gate-row .g-text{font-size:14px;color:var(--text-dim)}
+.gate-row code{color:var(--green)}
+.gate-steps{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px;font-family:var(--mono);font-size:12.5px}
+.gate-steps span{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 12px;color:var(--text-dim)}
+.gate-steps .arr{color:var(--accent);border:none;padding:0;background:none}
+
+/* ── Architecture diagram ── */
+.arch-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-top:44px;padding:28px;overflow-x:auto}
+.arch-box{display:grid;grid-template-columns:1fr;gap:14px}
+.arch-node{border:1px solid var(--border);border-radius:12px;padding:16px 18px;background:var(--surface2)}
+.arch-node .n-label{font-family:var(--mono);font-size:11px;letter-spacing:1px;margin-bottom:6px}
+.arch-node h4{font-size:16px;font-weight:700;margin-bottom:4px}
+.arch-node p{font-size:13.5px;color:var(--text-dim)}
+.arch-line{display:flex;align-items:center;gap:10px;color:var(--accent);font-family:var(--mono);font-size:12px;padding:4px 8px;flex-wrap:wrap}
+.arch-line code{color:var(--cyan);font-size:11.5px}
+.arch-line .spacer{flex:1;border-top:1px dashed var(--border)}
+.arch-flow{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.bd-none{border-color:var(--accent)!important;box-shadow:0 0 0 1px rgba(124,91,245,.25)}
+
+/* ── Feature grid ── */
+.feature-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:26px;transition:.15s}
+.feature-card:hover{border-color:var(--accent)}
+.feature-card h3{font-size:18px;font-weight:700;margin-bottom:10px}
+.feature-card p{font-size:14.4px;color:var(--text-dim)}
+.feature-card ul{list-style:none;margin-top:12px;font-size:13.8px;color:var(--text-dim)}
+.feature-card ul li{padding:3px 0 3px 20px;position:relative}
+.feature-card ul li:before{content:'▸';position:absolute;left:0;color:var(--accent2)}
+.feature-card .tag{font-family:var(--mono);font-size:11px;color:var(--accent2);margin-bottom:12px;display:block;letter-spacing:1px}
+
+/* ── Integrations / agents ── */
+.agent-chip{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:12px;color:var(--text);border:1px solid var(--border);border-radius:999px;padding:5px 12px;background:var(--surface);margin:4px 5px 0 0}
+.agent-chip .e{font-size:13px}
+.agent-tag{font-size:11px;color:var(--text-dim);margin-left:4px}
+
+/* ── Providers ── */
+.providers{display:flex;gap:12px;flex-wrap:wrap;margin-top:22px}
+.prov{font-family:var(--mono);font-size:13px;color:var(--text-dim);border:1px solid var(--border);border-radius:9px;padding:9px 15px;background:var(--surface)}
+.prov b{color:var(--text)}
+.env-table{width:100%;border-collapse:collapse;margin-top:32px;font-size:13.5px}
+.env-table th{font-family:var(--mono);font-size:11px;text-align:left;color:var(--text-dim);letter-spacing:.5px;text-transform:uppercase;border-bottom:1px solid var(--border);padding:10px 14px}
+.env-table td{padding:12px 14px;border-bottom:1px solid #20202e;color:var(--text-dim);vertical-align:top}
+.env-table td code{color:var(--cyan);font-size:12.5px}
+.env-table td:first-child{color:var(--text)}
+
+/* ── Recommended config ── */
+.rec{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-top:30px;overflow:hidden}
+.rec .rec-head{padding:16px 22px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:12px;letter-spacing:1px;color:var(--green);display:flex;align-items:center;gap:9px}
+.rec ul{list-style:none;padding:8px 0}
+.rec ul li{padding:10px 22px;border-bottom:1px solid #1c1c28;font-size:14.2px;color:var(--text-dim);display:flex;gap:12px;align-items:flex-start}
+.rec ul li:last-child{border-bottom:none}
+.rec ul li .tick{color:var(--green);font-family:var(--mono);flex:none}
+.rec ul li code{color:var(--cyan);font-size:12.8px}
+.rec ul li b{color:var(--text)}
+
+/* ── Quick start ── */
+.qs-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:44px;counter-reset:qs}
+.qs-step{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:26px;position:relative}
+.qs-step:hover{border-color:var(--accent)}
+.qs-step .num{font-family:var(--mono);font-size:28px;font-weight:700;color:var(--accent);line-height:1;margin-bottom:14px;display:block}
+.qs-step h3{font-size:17px;font-weight:700;margin-bottom:10px}
+.qs-step p{font-size:14px;color:var(--text-dim);margin-bottom:12px}
+.qs-step ol{list-style:none;counter-reset:sub}
+.qs-step ol li{counter-increment:sub;padding:5px 0 5px 24px;position:relative;font-size:13.8px;color:var(--text-dim)}
+.qs-step ol li:before{content:counter(sub);font-family:var(--mono);font-size:11.5px;color:var(--green);position:absolute;left:0;top:7px}
+.qs{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-top:44px;overflow:hidden}
+.qs .qs-tab{padding:13px 20px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:12px;color:var(--accent2);letter-spacing:.5px;display:flex;gap:20px;flex-wrap:wrap}
+.qs .qs-tab span{color:var(--text-dim);cursor:pointer}
+.qs .qs-tab span.on{color:var(--accent2);border-bottom:2px solid var(--accent2);padding-bottom:4px}
+.qs pre{padding:22px;font-size:13.5px;overflow-x:auto;color:#cfcfe0;line-height:1.75}
+.qs .cm{color:var(--green)} .qs .cmt{color:var(--text-dim)} .qs .pk{color:var(--yellow)} .qs .st{color:var(--accent2)}
+
+/* ── CTA / footer ── */
+.cta{padding:104px 0;text-align:center;border-bottom:1px solid var(--border);
+  background:radial-gradient(800px 380px at 50% 120%,rgba(124,91,245,.18),transparent 65%)}
+.cta h2{font-size:clamp(30px,4.4vw,46px);font-weight:800;letter-spacing:-.02em;max-width:740px;margin:0 auto}
+.cta p{color:var(--text-dim);font-size:17px;max-width:620px;margin:18px auto 34px}
+footer{padding:40px 0;color:var(--text-dim);font-size:13.5px}
+.foot-inner{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;align-items:center}
+.foot-inner .brand{font-size:14px}
+.foot-links{display:flex;gap:22px;flex-wrap:wrap}
+
+@media(max-width:860px){
+  .nav-links{display:none}
+  .principles .grid,.tiers,.qs-steps,.arch-flow{grid-template-columns:1fr}
+  section{padding:68px 0}
+  .env-table{font-size:12.5px}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner wrap">
+    <div class="brand"><span class="dot"></span>MoiraiCore</div>
+    <div class="nav-links">
+      <a href="#what">What it is</a>
+      <a href="#pipeline">3-Tier pipeline</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#use">How to use</a>
+      <a href="#integrations">Integrations</a>
+      <a href="#config">Configuration</a>
+      <a class="btn btn-primary" href="#use" style="margin-left:6px">Get started</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ─────────── HERO ─────────── -->
+<section class="hero">
+  <div class="wrap">
+    <span class="eyebrow">● Local-first &nbsp;·&nbsp; Provider-agnostic &nbsp;·&nbsp; Open source (MIT)</span>
+    <h1>Your AI orchestration platform, <span class="muted">on</span> <span class="accent">your machine</span>.</h1>
+    <p class="lede"><b>MoiraiCore</b> is a self-hosted, local-first AI orchestration platform for solo developers and small teams. It turns scattered AI models and coding agents into one governed workspace — Mission Control dashboard, memory vault, goal engine, and a strict three-tier code pipeline. Everything runs on your machine. Your data never leaves it.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="#use">Get started in 5 minutes</a>
+      <a class="btn" href="https://github.com/MoiraiCore/MoiraiCore" target="_blank" rel="noopener">★ Star on GitHub</a>
+    </div>
+    <div class="pill-strip">
+      <span class="pillar"><b>Local-first</b> data stays on-device</span>
+      <span class="pillar"><b>Open source</b> MIT license</span>
+      <span class="pillar"><b>Provider-agnostic</b> OpenRouter · DeepSeek · Gemini · Ollama</span>
+      <span class="pillar"><b>3-tier</b> governed pipeline</span>
+      <span class="pillar"><b>Agentic</b> goals plan &amp; execute themselves</span>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── WHAT IT IS ─────────── -->
+<section id="what">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 class="kicker">What it is</h2>
+      <h2>One control plane for the AI work <span style="color:var(--accent2)">you already run</span>.</h2>
+      <p>Most people glue together several AI tools and hope results hold together. MoiraiCore is the opposite: a single, self-hosted platform that plans the work, assigns capable agents, governs every generated change, and keeps a searchable record of what happened — all without sending your data to a vendor.</p>
+    </div>
+
+    <div class="grid">
+      <div class="principle">
+        <span class="arrow">01</span>
+        <div class="ico">🔒</div>
+        <h3>Local-first</h3>
+        <p>Data stays on your machine. The server binds to <code>localhost:7878</code> by default, state lives under the platform root, and external services are only ever called through providers you configure. No telemetry, no forced cloud sync, no vendor lock-in of your knowledge.</p>
+        <span class="tag">zero external writes by default</span>
+      </div>
+      <div class="principle">
+        <span class="arrow">02</span>
+        <div class="ico">🧩</div>
+        <h3>Provider-agnostic</h3>
+        <p>Swap model backends via environment variables. OpenAI-compatible <b>OpenRouter / DeepSeek</b> by default, native <b>Gemini</b> as a fallback, <b>Ollama</b> for local tiers. Every model speaks the same protocol, so the platform never cares which brain you plug in.</p>
+        <span class="tag">manage your own keys &amp; cost</span>
+      </div>
+      <div class="principle">
+        <span class="arrow">03</span>
+        <div class="ico">🧬</div>
+        <h3>Open source</h3>
+        <p>Licensed <b>MIT</b> (<code>Copyright (c) 2026 MoiraiCore</code>). Fork it, self-host it, read and audit every line, extend it to fit your workflow. No dark patterns, no license servers, no "contact sales".</p>
+        <span class="tag">fully auditable</span>
+      </div>
+      <div class="principle">
+        <span class="arrow">04</span>
+        <div class="ico">⚙️</div>
+        <h3>Agentic</h3>
+        <p>Autonomous agents don't just answer prompts — they plan and execute multi-step work. Goals are decomposed into dependent tasks, routed to the right specialist, and driven to a verified artifact without you babysitting each step.</p>
+        <span class="tag">plan → assign → execute → verify</span>
+      </div>
+      <div class="principle">
+        <span class="arrow">05</span>
+        <div class="ico">🗂️</div>
+        <h3>Governed</h3>
+        <p>Nothing reaches your codebase unexamined. A three-tier pipeline with a merge gate (<b>ScrumGate</b>) means no agent writes directly to <code>src/</code> — every change goes through generate → evaluate → merge.</p>
+        <span class="tag">release-engineer discipline, automated</span>
+      </div>
+      <div class="principle">
+        <span class="arrow">06</span>
+        <div class="ico">📦</div>
+        <h3>Fork of Hagent</h3>
+        <p>MoiraiCore is a <b>curated rebrand of Hagent</b> — the open-source platform core extracted and repackaged for public release. Get it on <a href="https://github.com/MoiraiCore/MoiraiCore" target="_blank" rel="noopener">GitHub</a>, spin it up locally, and own the whole stack.</p>
+        <span class="tag">formerly Hagent / Hagent OS</span>
+      </div>
+    </div>
+
+    <div class="grid" style="margin-top:16px">
+      <div class="card">
+        <div class="mono-tag mk-blue">ORCHESTRATION</div>
+        <h3>Mission Control dashboard</h3>
+        <p>A single-file SPA (served by the control plane at <code>:7878</code>) that unifies home, Jarvis, goals, agents, kanban, outputs, vault, and reports in one place.</p>
+      </div>
+      <div class="card">
+        <div class="mono-tag mk-purple">PLANNING</div>
+        <h3>Goal engine + kanban</h3>
+        <p>Decompose an outcome into a dependency-aware backlog, route each task to the right agent, evaluate artifacts, and synthesize a final report. Track everything on a board.</p>
+      </div>
+      <div class="card">
+        <div class="mono-tag mk-green">KNOWLEDGE</div>
+        <h3>Memory vault</h3>
+        <p>A markdown knowledge graph indexed in <b>SQLite FTS5</b>. Vault files, outputs, agent memory, and project context persist as searchable evidence — not disposable chat history.</p>
+      </div>
+      <div class="card">
+        <div class="mono-tag mk-cyan">SECURITY</div>
+        <h3>Built-in auth &amp; audit</h3>
+        <p><b>JWT</b> auth (24h access / 30d refresh), <b>PBKDF2-SHA256</b> password hashing, lockout protection, and an audit log of agent actions.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── 3-TIER PIPELINE ─────────── -->
+<section id="pipeline">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 class="kicker">How it works</h2>
+      <h2>A three-tier agent model with a <span style="color:var(--green)">release engineer</span> built in.</h2>
+      <p>Not one all-powerful agent — a governed team where each tier does one job well. MoiraiCore (Tier 1) plans, Tier 2 architects and generates, Tier 3 executes and repairs locally, and ScrumGate reviews everything before it merges.</p>
+    </div>
+
+    <div class="tiers">
+      <div class="tier">
+        <span class="tnum mk-blue">TIER 1 · DIRECTOR / SCRUMMASTER</span>
+        <h3>Strategic layer</h3>
+        <div class="role">plans · assigns · evaluates</div>
+        <p>Owns the backlog and decomposes goals into tasks. Assigns work to Tier 2 (architect) or Tier 3 (builder) using <b>keyword + LLM routing</b>, then evaluates artifacts against merge gates. The model never decides what to build next — MoiraiCore does.</p>
+        <ul>
+          <li>Backlog: goals → task decomposition</li>
+          <li>Assignment: Tier 2 vs Tier 3 routing</li>
+          <li>Evaluation: PASS/FAIL artifact gates</li>
+          <li>Reporting: delivery status synthesis</li>
+        </ul>
+        <div class="model-box">tier1_model = <span class="mk-green">director</span></div>
+      </div>
+
+      <div class="tier">
+        <span class="tnum mk-purple">TIER 2 · ARCHITECT</span>
+        <h3>Designs &amp; generates</h3>
+        <div class="role">provider-agnostic LLM backend</div>
+        <p>A provider-agnostic engine that produces implementation plans and code artifacts. Defaults to <b>DeepSeek via OpenRouter</b>; swap in <b>Gemini</b> or <b>Antigravity</b> as alternatives via env vars — no code changes.</p>
+        <ul>
+          <li>Implementation plans / blueprints</li>
+          <li>Code generation &amp; large tasks</li>
+          <li>Provider failover built in</li>
+          <li>No hardcoded vendor lock-in</li>
+        </ul>
+        <div class="model-box">TIER2_PROVIDER=<span class="mk-cyan">openai</span><br>TIER2_MODEL=<span class="mk-yellow">deepseek/deepseek-v4-flash-0731</span><br>TIER2_BASE_URL=<span class="mk-orange">openrouter.ai/api/v1</span></div>
+      </div>
+
+      <div class="tier">
+        <span class="tnum mk-cyan">TIER 3 · BUILDER</span>
+        <h3>Executes &amp; repairs locally</h3>
+        <div class="role">local Ollama worker</div>
+        <p>A local model handles bounded <b>micro-fixes</b>, single-file edits, and <b>test-driven fixes</b> without leaving the machine. Fast iterations that stay on-device and never cost an API token.</p>
+        <ul>
+          <li>Micro-fixes &amp; small refactors</li>
+          <li>Single-file edits</li>
+          <li>Test-driven repair loops</li>
+          <li>Fully offline execution</li>
+        </ul>
+        <div class="model-box">tier3_model = <span class="mk-yellow">qwen2.5-coder:14b</span> · Ollama</div>
+      </div>
+    </div>
+
+    <div class="gate-row">
+      <span class="g-label">▸ SCRUMGATE</span>
+      <span class="g-text">The merge queue. Every generated change is evaluated — syntax ✓ security ✓ structure ✓ — and merged to protected <code>src/</code> only on approval. Direct writes are blocked.</span>
+    </div>
+    <div class="gate-steps">
+      <span>generate</span><span class="arr">→</span>
+      <span>evaluate</span><span class="arr">→</span>
+      <span>merge</span>
+      <span class="arr" style="color:var(--text-dim)">· no bypass · no unreviewed merges · no black-box commits</span>
+    </div>
+    <p style="margin-top:18px;font-family:var(--mono);font-size:12.5px;color:var(--text-dim)">ScrumGate rules: no writes to <code>src/</code> without a DONE evaluation · all generation via Tier 2/3 · merge queue only · evaluation required before merge · the LLM creates tasks &amp; submits artifacts, never writes <code>src/</code> directly.</p>
+  </div>
+</section>
+
+<!-- ─────────── ARCHITECTURE ─────────── -->
+<section id="architecture">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 class="kicker">Architecture</h2>
+      <h2>How goals flow through the system.</h2>
+      <p>Requests enter through the dashboard or Hermes Bridge, are planned by the Director (Tier 1), executed by an architect or builder, and land behind the ScrumGate — never straight into your source.</p>
+    </div>
+
+    <div class="arch-wrap">
+      <div class="arch-box">
+        <div class="arch-node bd-none">
+          <div class="n-label mk-purple">ENTRY POINTS</div>
+          <h4>You</h4>
+          <p>Mission Control dashboard (:7878) · Hermes Bridge CLI · Jarvis chat</p>
+        </div>
+        <div class="arch-line"><span>▾</span></div>
+        <div class="arch-node">
+          <div class="n-label mk-blue">TIER 1 · DIRECTOR (SCRUMMASTER)</div>
+          <h4>Plans &amp; assigns</h4>
+          <p>Owns backlog, decomposes goals, routes via keyword/LLM routing, evaluates artifacts.</p>
+        </div>
+        <div class="arch-line" style="padding:8px">Route with keyword/LLM scoring</div>
+        <div class="arch-flow">
+          <div class="arch-node">
+            <div class="n-label mk-purple">TIER 2 · ARCHITECT</div>
+            <h4>Generate / design</h4>
+            <p>DeepSeek via OpenRouter · Gemini native fallback · Antigravity</p>
+          </div>
+          <div class="arch-node">
+            <div class="n-label mk-cyan">TIER 3 · BUILDER</div>
+            <h4>Execute / repair</h4>
+            <p>Local Ollama · qwen2.5-coder:14b · micro-fixes &amp; TDD</p>
+          </div>
+          <div class="arch-node">
+            <div class="n-label mk-green">VAULT</div>
+            <h4>Knowledge graph</h4>
+            <p>Markdown + SQLite FTS5 · agents read &amp; write memory</p>
+          </div>
+        </div>
+        <div class="arch-line"><span>▾ merge queue</span></div>
+        <div class="arch-node bd-none" style="border-color:var(--green)!important;box-shadow:0 0 0 1px rgba(74,222,128,.2)">
+          <div class="n-label mk-green">SCRUMGATE</div>
+          <h4>generate → evaluate → merge</h4>
+          <p>Protected <code>src/</code> · direct writes blocked · syntax/security/structure checks on every change</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── HOW TO USE ─────────── -->
+<section id="use">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 class="kicker">How to use it</h2>
+      <h2>From zero to running in five minutes.</h2>
+      <p>Install dependencies, set one API key, run one command — then the first-launch wizard walks you through creating your admin account and configuring your models.</p>
+    </div>
+
+    <div class="qs-steps">
+      <div class="qs-step">
+        <span class="num">01</span>
+        <h3>Initial setup</h3>
+        <p>Get the code, install dependencies, and start the server.</p>
+        <ol>
+          <li><code>git clone</code> from GitHub</li>
+          <li><code>pip install -r requirements.txt</code></li>
+          <li>Set a Tier 2 API key (<code>OPENROUTER_API_KEY</code>)</li>
+          <li>Run <code>python3 scripts/server.py --port 7878</code></li>
+          <li>Open <code>http://localhost:7878</code></li>
+        </ol>
+      </div>
+      <div class="qs-step">
+        <span class="num">02</span>
+        <h3>First-run wizard</h3>
+        <p>MoiraiCore walks you through onboarding on first launch.</p>
+        <ol>
+          <li><b>Create your admin account</b> — local username/password, or <i>Sign in with Google</i> (the first account becomes admin)</li>
+          <li><b>System configuration</b> — instance name, workspace directory, and the default Tier 1 / Tier 2 / Tier 3 models</li>
+          <li><b>Done</b> — config saved to <code>config/system.json</code>, Mission Control opens</li>
+        </ol>
+        <p style="margin-top:10px;font-size:12.5px">Returning users: Settings → Setup &amp; SSO.</p>
+      </div>
+      <div class="qs-step">
+        <span class="num">03</span>
+        <h3>Everyday usage</h3>
+        <p>Run real AI work through one governed workspace.</p>
+        <ol>
+          <li><b>Create goals</b> — the goal engine decomposes them</li>
+          <li><b>Chat with Jarvis</b> — conversational intelligence with personality + session memory</li>
+          <li><b>Manage specialist agents</b> — route work to the right specialist</li>
+          <li><b>Track on the kanban</b> — tasks move through the board</li>
+          <li><b>Organize workspaces</b> — isolate customer/project spaces over HTTP</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="qs">
+      <div class="qs-tab"><span class="on">quickstart.sh</span><span>tier2.env</span><span>daily.sh</span></div>
+<pre><span class="cmt"># 1. Install dependencies &amp; start the server</span>
+<span class="cm">$</span> <span class="pk">cd</span> MoiraiCore
+<span class="cm">$</span> pip install -r requirements.txt
+<span class="cm">$</span> <span class="pk">export</span> OPENROUTER_API_KEY=<span class="st">sk-or-...</span>
+<span class="cm">$</span> python3 scripts/server.py --port 7878
+<span class="gtext">✔</span> MoiraiCore running at <span class="st">http://localhost:7878</span>
+
+<span class="cmt"># 2. Optional: native Gemini fallback for Tier 2 resilience</span>
+<span class="cmt">#    export TIER2_PROVIDER=gemini ; export GEMINI_API_KEY=...</span>
+
+<span class="cmt"># 3. Chat with Jarvis / route work from the terminal</span>
+<span class="cm">$</span> python3 hermes_bridge.py ask <span class="st">"Summarise this"</span> --context <span class="st">"..."</span>
+<span class="cm">$</span> python3 hermes_bridge.py route <span class="st">"write a blog post about security"</span>
+<span class="cm">$</span> python3 hermes_bridge.py orchestrate <span class="st">"Build a full SEO analysis"</span></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── INTEGRATIONS & AGENTS ─────────── -->
+<section id="integrations">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 class="kicker">Integrations &amp; specialist agents</h2>
+      <h2>Built to plug into your existing stack.</h2>
+      <p>MoiraiCore ships with a registry of specialist agents routed by <b>keyword + LLM routing</b> (token matching, rarity weighting, coverage scoring), plus two headliner integrations: Hermes Bridge and Google SSO.</p>
+    </div>
+
+    <div style="margin-top:26px">
+      <span class="agent-chip"><span class="e">🧠</span>Hermes<span class="agent-tag">general orchestrator</span></span>
+      <span class="agent-chip"><span class="e">🔍</span>Researcher<span class="agent-tag">investigation · analysis</span></span>
+      <span class="agent-chip"><span class="e">✍️</span>Writer<span class="agent-tag">content · docs</span></span>
+      <span class="agent-chip"><span class="e">💻</span>Developer<span class="agent-tag">code · security</span></span>
+      <span class="agent-chip"><span class="e">🎯</span>Antigravity<span class="agent-tag">multi-agent · IDE</span></span>
+      <span class="agent-chip"><span class="e">🔧</span>Codex<span class="agent-tag">OpenAI OAuth · key-free</span></span>
+      <span class="agent-chip"><span class="e">🎯</span>Project Manager<span class="agent-tag">pipeline orchestrator</span></span>
+    </div>
+
+    <div class="grid">
+      <div class="feature-card">
+        <span class="tag">INTEGRATION · HERMES BRIDGE</span>
+        <h3>Hermes Bridge</h3>
+        <p><code>hermes_bridge.py</code> is a CLI wrapper that connects mission control to a general-purpose agent. Every query is <b>routed to the best agent</b> (researcher, writer, developer, hermes), agent memory is loaded as context, and every action is logged.</p>
+        <ul>
+          <li><code>ask "…"</code> — one-off query with optional --route / --log</li>
+          <li><code>route "…"</code> — see which specialist picks it up</li>
+          <li><code>orchestrate "…"</code> — multi-agent pipeline</li>
+          <li><code>resume &lt;session&gt;</code> — continue a conversation</li>
+          <li><code>sessions</code> / <code>history</code> / <code>status</code></li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <span class="tag">INTEGRATION · GOOGLE SSO</span>
+        <h3>Google single sign-on</h3>
+        <p>Sign in with Google instead of a local password. Uses <b>OAuth 2.0</b> with <b>PKCE</b> — only the Client ID is needed, never a client secret. Configured in the setup wizard or Settings → Setup &amp; SSO.</p>
+        <ul>
+          <li>Create an OAuth <i>Web application</i> in the Google Cloud console</li>
+          <li>Authorized redirect URI: <code>http://localhost:&lt;port&gt;/api/auth/google/callback</code></li>
+          <li>Paste the public Client ID into the wizard</li>
+          <li>First account to complete setup becomes admin</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <span class="tag">WORKFLOWS</span>
+        <h3>Workflows &amp; webhooks</h3>
+        <p>Reusable multi-step execution definitions, HMAC-aware webhook delivery, and resumable background goals keep long work alive and observable.</p>
+      </div>
+      <div class="feature-card">
+        <span class="tag">EVIDENCE</span>
+        <h3>Outputs &amp; reports</h3>
+        <p>Aggregate orchestration runs, goal reports, and agent files into one filterable browser — verify work instead of trusting model claims. Export reports to PDF.</p>
+      </div>
+      <div class="feature-card">
+        <span class="tag">CONVERSATION</span>
+        <h3>Jarvis</h3>
+        <p>Conversational intelligence engine with personality selection, session persistence, memory-oriented context, and multi-agent routing under the hood.</p>
+      </div>
+      <div class="feature-card">
+        <span class="tag">ISOLATION</span>
+        <h3>Workspaces</h3>
+        <p>Customer and project work lives in its own spaces. They call MoiraiCore over HTTP and never touch core config or each other.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── PROVIDERS & CONFIG ─────────── -->
+<section id="config">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 class="kicker">Providers &amp; configuration</h2>
+      <h2>Bring your own models. <span style="color:var(--accent2)">Any provider.</span></h2>
+      <p>MoiraiCore is provider-agnostic by design. Whatever brain you plug in, the platform behaves the same — you keep your credentials, your choice, and your cost control.</p>
+      <div class="providers">
+        <span class="prov"><b>OpenRouter</b> · default Tier 2</span>
+        <span class="prov"><b>DeepSeek</b> · OpenAI-compatible</span>
+        <span class="prov"><b>Gemini</b> · native fallback</span>
+        <span class="prov"><b>Antigravity</b> · Tier 2 alternative</span>
+        <span class="prov"><b>Ollama</b> · local Tier 3</span>
+        <span class="prov"><b>Codex</b> · OpenAI OAuth bridge</span>
+      </div>
+    </div>
+
+    <table class="env-table">
+      <thead><tr><th>Variable</th><th>Default</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>TIER2_PROVIDER</code></td><td><code>openai</code></td><td><code>openai</code> (OpenAI-compatible) or <code>gemini</code> (native)</td></tr>
+        <tr><td><code>TIER2_MODEL</code></td><td><code>deepseek/deepseek-v4-flash-0731</code></td><td>Model id for the architect tier</td></tr>
+        <tr><td><code>TIER2_BASE_URL</code></td><td><code>https://openrouter.ai/api/v1</code></td><td>OpenAI-compatible endpoint</td></tr>
+        <tr><td><code>OPENROUTER_API_KEY</code></td><td>—</td><td>Credential (OpenAI backend)</td></tr>
+        <tr><td><code>GEMINI_API_KEY</code></td><td>—</td><td>Credential (Gemini native fallback)</td></tr>
+        <tr><td><code>TIER2_MAX_TOKENS</code></td><td><code>8192</code></td><td>Output budget — keep generous for reasoning models</td></tr>
+        <tr><td><code>TIER3_MODEL</code></td><td><code>qwen2.5-coder:14b</code></td><td>Local Ollama builder model</td></tr>
+        <tr><td><code>HERMES_CLI</code></td><td><i>auto-detect</i></td><td>Path to the Hermes CLI used by the Bridge</td></tr>
+      </tbody>
+    </table>
+
+    <div class="rec">
+      <div class="rec-head">▸ RECOMMENDED CONFIGURATION</div>
+      <ul>
+        <li><span class="tick">✔</span><div><b>Enable the Gemini fallback for Tier 2 resilience.</b> Set <code>TIER2_PROVIDER=gemini</code> and <code>GEMINI_API_KEY=…</code> alongside OpenRouter so the pipeline keeps running if the primary path stalls.</div></li>
+        <li><span class="tick">✔</span><div><b>Keep <code>TIER2_MAX_TOKENS</code> at 8192+</b> for reasoning/architect models — too-small budgets truncate plans and cause rework.</div></li>
+        <li><span class="tick">✔</span><div><b>Run Tier 3 on a machine with ~26&nbsp;GB+ RAM</b> for comfortable local <code>qwen2.5-coder:14b</code> inference; drop to a smaller 7B/8B quant on lower-spec hardware.</div></li>
+        <li><span class="tick">✔</span><div><b>Add Antigravity (Google Pro) as a Tier 2 alternative</b> for parallel sub-agent / heavy coding sessions — route with the <code>antigravity</code> agent trigger (<code>parallel</code>, <code>multi-agent</code>).</div></li>
+        <li><span class="tick">✔</span><div><b>Use Codex for key-free code generation</b> — authenticate once via <i>Settings → OpenAI OAuth</i> with your ChatGPT account to avoid a paid API key for pure code tasks.</div></li>
+        <li><span class="tick">✔</span><div><b>Use the correct Google redirect URI</b> — <code>http://localhost:&lt;port&gt;/api/auth/google/callback</code> — or Google sign-in silently fails. PKCE means only the Client ID is needed.</div></li>
+        <li><span class="tick">✔</span><div><b>Route by intent, not by guessing.</b> Trigger routers on keywords — <code>research</code>/<code>analyse</code> → Researcher, <code>write</code>/<code>blog</code> → Writer, <code>fix</code>/<code>debug</code> → Developer, <code>pipeline</code>/<code>orchestrate</code> → Project Manager.</div></li>
+        <li><span class="tick">✔</span><div><b>Keep secrets out of git.</b> Credentials live in <code>.env</code> / <code>config/auth</code> (git-ignored); customer projects and private vault content are intentionally excluded from the public repo.</div></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── CTA ─────────── -->
+<section class="cta">
+  <div class="wrap">
+    <h2>Own your AI stack. <span style="color:var(--accent2)">Run it locally.</span></h2>
+    <p>MoiraiCore gives solo developers and small teams a governed, portable, provider-agnostic way to run real AI work — without giving your data away.</p>
+    <div class="cta-row" style="justify-content:center">
+      <a class="btn btn-primary" href="#use">Get started</a>
+      <a class="btn" href="https://github.com/MoiraiCore/MoiraiCore" target="_blank" rel="noopener">Fork on GitHub</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot-inner">
+    <div class="brand"><span class="dot"></span>MoiraiCore</div>
+    <div class="foot-links">
+      <a href="#what">What it is</a>
+      <a href="#pipeline">Pipeline</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#integrations">Integrations</a>
+      <a href="https://github.com/MoiraiCore/MoiraiCore" target="_blank" rel="noopener">GitHub</a>
+    </div>
+    <span style="font-family:var(--mono);font-size:12px">Local-first · Open source · MIT</span>
+  </div>
+</footer>
+
+</body>
+</html>
