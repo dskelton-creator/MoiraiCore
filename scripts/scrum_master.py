@@ -505,6 +505,10 @@ class ScrumMaster:
             task.assigned_at = datetime.now().isoformat()
             self._save_state()
 
+            # On retry, clear old failed artifacts so they don't poison evaluation
+            if task.current_iteration > 0:
+                task.artifacts.clear()
+
             agent_lbl = self._agent_label(task.tier)
             # Live transcript: the agent has picked up work
             self._emit(agent_lbl, f"🚀 Started task: {task.title}")
@@ -563,13 +567,18 @@ class ScrumMaster:
         Fallback: static template (preserves prior behavior) when Gemini is
         unreachable or no key is set.
         """
+        # Build description with retry feedback if this is a retry
+        description = f"{task.title}\n\n{task.description}"
+        if task.current_iteration > 0 and task.evaluation_notes:
+            description += f"\n\n=== PREVIOUS ATTEMPT FAILED — FIX THESE ISSUES ===\n{task.evaluation_notes}"
+
         try:
             from gemini_worker import GeminiConfig, is_gemini_available, generate_architecture
             cfg = GeminiConfig.from_env()
             if is_gemini_available(cfg):
                 plan = generate_architecture(
                     project_space=str(Path(self.project_space)),
-                    description=f"{task.title}\n\n{task.description}",
+                    description=description,
                     requirements=[task.description] if task.description else [],
                     config=cfg,
                 )
@@ -680,14 +689,19 @@ The Antigravity IDE with Gemini Pro should be used for this work.
         return "\n".join(lines)
 
     def _generate_tier3_artifact(self, task: Task) -> str:
-        """Generate an implementation plan for Tier 3 tasks (Ollama / Ornith 9B)."""
+        """Generate an implementation plan for Tier 3 tasks (Qwen 2.5 Coder / Ollama)."""
+        description = task.description
+        retry_section = ""
+        if task.current_iteration > 0 and task.evaluation_notes:
+            retry_section = f"\n\n=== PREVIOUS ATTEMPT FAILED — FIX THESE ISSUES ===\n{task.evaluation_notes}\n"
+
         return f"""# Implementation Plan for {task.title}
 
 ## Task Description
-{task.description}
+{description}{retry_section}
 
 ## Approach
-This task should be handled by the Tier 3 builder (Ollama/Ornith 9B) for focused, well-defined coding work.
+This task should be handled by the Tier 3 builder (local Ollama model) for focused, well-defined coding work.
 
 ### Steps:
 1. Review the requirements and any existing designs/specifications
@@ -705,7 +719,7 @@ This task should be handled by the Tier 3 builder (Ollama/Ornith 9B) for focused
 
 ### Notes
 This is a Tier 3 task focused on concrete implementation.
-The Ollama/Ornith 9B model should be used for this work.
+The local Ollama model should be used for this work.
 """
 
     # ── Artifact Management (Merge Gates) ─────────────────────────────────────
@@ -814,7 +828,13 @@ The Ollama/Ornith 9B model should be used for this work.
             self.completed_tasks.append(task)
         else:
             task.current_iteration += 1
-            task.evaluation_notes = f"{failed_count}/{len(evaluations)} artifacts failed"
+            # Build specific feedback for the retry
+            failed_notes = [e["notes"] for e in evaluations if not e["passed"]]
+            task.evaluation_notes = (
+                f"[RETRY #{task.current_iteration}/{task.max_iterations}] "
+                f"{failed_count}/{len(evaluations)} artifacts failed: "
+                + "; ".join(failed_notes)
+            )
 
             if task.current_iteration >= task.max_iterations:
                 task.status = TaskStatus.BLOCKED
