@@ -867,6 +867,27 @@ class GoalEngine:
                 "task_id": task_id, "goal_id": goal_id, "agent": agent,
                 "ok": out_result.get("ok", False), "routed_to": out_result.get("routed_to"),
             })
+            # ── Entity context tracking (durable domain state) ──
+            # Record a snapshot of what was known when this task ran, linked
+            # to the task. This provides the temporal-validity dimension of
+            # the context graph that the execution graph alone misses.
+            try:
+                from vault_index import VaultIndex, _index as _vi_cache
+                vi = _vi_cache or VaultIndex()
+                vi.touch_entity(
+                    entity_ref=f"goal:{goal_id}",
+                    state={
+                        "task_title": title,
+                        "agent": agent,
+                        "task_id": task_id,
+                        "ok": out_result.get("ok", False),
+                        "routed_to": out_result.get("routed_to"),
+                    },
+                    task_id=task_id,
+                    goal_id=goal_id,
+                )
+            except Exception:
+                pass  # never break execution on entity tracking
             # ── Emit transcript: task completed (project-scoped) ──
             try:
                 from project_chat import emit_task_completed

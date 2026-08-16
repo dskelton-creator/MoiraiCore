@@ -159,6 +159,17 @@ class VaultIndex:
             );
 
             CREATE INDEX IF NOT EXISTS idx_outputs_agent ON agent_outputs(agent);
+
+            CREATE TABLE IF NOT EXISTS entity_states (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                entity_ref TEXT NOT NULL,
+                state TEXT DEFAULT '{}',
+                task_id TEXT DEFAULT '',
+                goal_id TEXT DEFAULT '',
+                updated_at TEXT DEFAULT ''
+            );
+            CREATE INDEX IF NOT EXISTS idx_entity_states_ref ON entity_states(entity_ref);
+            CREATE INDEX IF NOT EXISTS idx_entity_states_time ON entity_states(updated_at);
             """
         )
         # Keep FTS5 index in sync
@@ -1012,6 +1023,93 @@ class VaultIndex:
             ).fetchall()
         conn.close()
         return [dict(r) for r in rows]
+
+    # ── Entity State Tracking (durable domain context graph) ──────────
+
+    def touch_entity(self, entity_ref, state=None, task_id="",
+                     goal_id=""):
+        """Record a point-in-time snapshot of a domain entity's state,
+        linked to the execution task that observed it.
+
+        This provides the 'temporal validity' piece: query 'what was known
+        about X when task T ran?' — the distinction between execution-graph
+        state and context-graph state that the HydraDB article identifies
+        as the gap in most agent systems.
+
+        entity_ref: stable domain identifier ('project:quongtea',
+                    'customer:123', 'agent:researcher')
+        state:      dict or JSON string — what was true about the entity
+        task_id:    the execution task ID that produced this knowledge
+        goal_id:    the goal the task belongs to
+        """
+        try:
+            import json as _json
+            if isinstance(state, dict):
+                state = _json.dumps(state, default=str)
+            state = state or '{}'
+            now = datetime.now().isoformat()
+            conn = self._conn()
+            conn.execute(
+                """INSERT INTO entity_states
+                   (entity_ref, state, task_id, goal_id, updated_at)
+                   VALUES (?,?,?,?,?)""",
+                (entity_ref, state, task_id or '', goal_id or '', now),
+            )
+            conn.commit()
+            conn.close()
+            return True
+        except Exception:
+            return False
+
+    def get_entity_state(self, entity_ref, at_time=None):
+        """Get the most recent state snapshot for an entity.
+
+        at_time: optional ISO timestamp; if provided, returns the most
+                 recent snapshot with updated_at <= at_time (historical
+                 context — 'what was true at this moment?').
+
+        Returns (state_dict, task_id, updated_at) or (None, None, None).
+        """
+        try:
+            import json as _json
+            conn = self._conn()
+            if at_time:
+                row = conn.execute(
+                    """SELECT state, task_id, updated_at FROM entity_states
+                       WHERE entity_ref=? AND updated_at <= ?
+                       ORDER BY updated_at DESC LIMIT 1""",
+                    (entity_ref, at_time),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    """SELECT state, task_id, updated_at FROM entity_states
+                       WHERE entity_ref=?
+                       ORDER BY updated_at DESC LIMIT 1""",
+                    (entity_ref,),
+                ).fetchone()
+            conn.close()
+            if row:
+                return (_json.loads(row["state"]), row["task_id"],
+                        row["updated_at"])
+            return (None, None, None)
+        except Exception:
+            return (None, None, None)
+
+    def get_entity_timeline(self, entity_ref, limit=50):
+        """Get all state snapshots for an entity in reverse chronological
+        order. Useful for auditing: 'how did this entity's context evolve?'"""
+        try:
+            conn = self._conn()
+            rows = conn.execute(
+                """SELECT state, task_id, goal_id, updated_at
+                   FROM entity_states WHERE entity_ref=?
+                   ORDER BY updated_at DESC LIMIT ?""",
+                (entity_ref, limit),
+            ).fetchall()
+            conn.close()
+            return [dict(r) for r in rows]
+        except Exception:
+            return []
 
 
 # ── Convenience functions ────────────────────────────────────────────
