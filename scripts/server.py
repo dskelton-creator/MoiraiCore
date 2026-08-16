@@ -672,6 +672,19 @@ def _check_rate_limit(client_ip):
     _rate_limit_store[client_ip].append(now)
     return True
 
+
+def _safe_dir_join(base_dir, filename):
+    """Resolve base_dir/filename and require the result to stay inside base_dir.
+
+    Raises ValueError if the filename escapes the directory (path traversal).
+    Callers should catch ValueError and return 403.
+    """
+    resolved = (base_dir / filename).resolve()
+    if not resolved.is_relative_to(base_dir.resolve()):
+        raise ValueError(f"path escapes directory: {filename}")
+    return resolved
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
 
     # Hide server version
@@ -1058,13 +1071,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             name = p.path[len("/api/projects/"):-len("/chat/stream")]
             qs = parse_qs(p.query)
             token_param = qs.get("token", [None])[0]
-            if token_param:
-                # Validate the token from query param
-                try:
-                    self._user_payload = _auth.verify_token(token_param)
-                except ValueError:
-                    self.send_error(401, "Invalid token")
-                    return
+            if not token_param:
+                self.send_error(401, "Token required for SSE stream")
+                return
+            try:
+                self._user_payload = _auth.verify_token(token_param)
+            except ValueError:
+                self.send_error(401, "Invalid token")
+                return
             sys.path.insert(0, str(AGENT_OS_ROOT / "scripts"))
             from project_chat import ChatEventStream
             stream = ChatEventStream(name)
@@ -2039,7 +2053,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         if p.path.startswith("/api/workflows/"):
             wf_id = p.path[len("/api/workflows/"):].split("?")[0]
-            wf_file = AGENT_OS_ROOT / "config" / "workflows" / f"{wf_id}.json"
+            try:
+                wf_file = _safe_dir_join(AGENT_OS_ROOT / "config" / "workflows", f"{wf_id}.json")
+            except ValueError:
+                self.send_error(403, "Invalid workflow id")
+                return
             if not wf_file.exists():
                 # Try by ID field
                 wf_dir = AGENT_OS_ROOT / "config" / "workflows"
@@ -2082,7 +2100,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         if p.path.startswith("/api/workflow-runs/"):
             run_id = p.path[len("/api/workflow-runs/"):].split("?")[0]
-            run_file = AGENT_OS_ROOT / "config" / "workflow-runs" / f"{run_id}.json"
+            try:
+                run_file = _safe_dir_join(AGENT_OS_ROOT / "config" / "workflow-runs", f"{run_id}.json")
+            except ValueError:
+                self.send_error(403, "Invalid run id")
+                return
             if not run_file.exists():
                 self.send_error(404, f"Run '{run_id}' not found")
                 return
@@ -2754,6 +2776,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         p = urlparse(self.path)
 
+        # ── Auth check (skip for public paths) ──
+        self._user_payload = None
+        if not self._is_public_path(p.path):
+            try:
+                self._user_payload = self._require_auth()
+            except ValueError:
+                return  # _require_auth already sent 401
+
+        # ── Rate limiting ──
+        client_ip = self.client_address[0]
+        if not _check_rate_limit(client_ip):
+            self.send_error(429, "Rate limit exceeded. Max %d requests per %d seconds." % (_RATE_LIMIT_MAX, _RATE_LIMIT_WINDOW))
+            return
+
         # ── DIAGRAMS (Excalidraw) — POST save / DELETE (DELETE delegates here) ──
         if self.handle_diagrams(p):
             return
@@ -3424,23 +3460,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 _json(self, {"ok": False, "error": str(e)})
             return
 
-        # ── Auth check (skip for public paths) ──
-        self._user_payload = None
-        if not self._is_public_path(p.path):
-            try:
-                self._user_payload = self._require_auth()
-            except ValueError:
-                return  # _require_auth already sent 401
-
-        # ── Rate limiting ──
-        client_ip = self.client_address[0]
-        if not _check_rate_limit(client_ip):
-            self.send_error(429, "Rate limit exceeded. Max %d requests per %d seconds." % (_RATE_LIMIT_MAX, _RATE_LIMIT_WINDOW))
-            return
-
         # ── Learn & Build (LnB) — POST endpoints ──
 
         if p.path == "/api/lnb/learn":
+            # SSRF guard: learning can fetch arbitrary URLs, so require auth.
+            try:
+                self._require_auth()
+            except ValueError:
+                return  # _require_auth already sent 401
             length = int(self.headers.get("Content-Length", 0))
             try:
                 body = json.loads(self.rfile.read(length)) if length > 0 else {}
@@ -4558,7 +4585,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             wf["updated_at"] = datetime.now().isoformat()
             WORKFLOWS_DIR = AGENT_OS_ROOT / "config" / "workflows"
             WORKFLOWS_DIR.mkdir(parents=True, exist_ok=True)
-            wf_file = WORKFLOWS_DIR / f"{wf_id}.json"
+            try:
+                wf_file = _safe_dir_join(WORKFLOWS_DIR, f"{wf_id}.json")
+            except ValueError:
+                self.send_error(403, "Invalid workflow id")
+                return
             wf_file.write_text(json.dumps(wf, indent=2))
             _json(self, {"ok": True, "id": wf_id, "message": f"Workflow '{wf.get('name', wf_id)}' saved."})
             return
@@ -4575,7 +4606,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.send_error(400, "Missing workflow id")
                 return
             WORKFLOWS_DIR = AGENT_OS_ROOT / "config" / "workflows"
-            wf_file = WORKFLOWS_DIR / f"{wf_id}.json"
+            try:
+                wf_file = _safe_dir_join(WORKFLOWS_DIR, f"{wf_id}.json")
+            except ValueError:
+                self.send_error(403, "Invalid workflow id")
+                return
             if wf_file.exists():
                 wf_file.unlink()
                 _json(self, {"ok": True, "message": f"Workflow '{wf_id}' deleted."})
@@ -4616,7 +4651,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.send_error(400, "Missing workflow id")
                 return
             WORKFLOWS_DIR = AGENT_OS_ROOT / "config" / "workflows"
-            wf_file = WORKFLOWS_DIR / f"{wf_id}.json"
+            try:
+                wf_file = _safe_dir_join(WORKFLOWS_DIR, f"{wf_id}.json")
+            except ValueError:
+                self.send_error(403, "Invalid workflow id")
+                return
             if not wf_file.exists():
                 found = None
                 for f in WORKFLOWS_DIR.glob("*.json"):

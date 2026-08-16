@@ -368,7 +368,9 @@ def run_orchestration(task: str, preferred_agents: list[str] = None,
 
 def get_run(run_id: str):
     """Retrieve a saved run record. Returns dict or None."""
-    run_file = RUNS_DIR / f"{run_id}.json"
+    run_file = (RUNS_DIR / f"{run_id}.json").resolve()
+    if not run_file.is_relative_to(RUNS_DIR.resolve()):
+        return None
     if run_file.exists():
         return json.loads(run_file.read_text())
     return None

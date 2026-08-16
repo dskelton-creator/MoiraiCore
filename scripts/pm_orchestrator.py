@@ -325,7 +325,9 @@ class PMOrchestrator:
 
     def get_run(self, run_id):
         """Retrieve a saved run record."""
-        run_file = RUNS_DIR / f"{run_id}.json"
+        run_file = (RUNS_DIR / f"{run_id}.json").resolve()
+        if not run_file.is_relative_to(RUNS_DIR.resolve()):
+            return None
         if run_file.exists():
             return json.loads(run_file.read_text())
         return None
