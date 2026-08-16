@@ -74,6 +74,23 @@ try:
 except ImportError:
     pass
 
+# ── Tier 1 (Director / ScrumMaster orchestration) model ──
+# The Tier 1 orchestration runs through the `hermes` CLI; pass -m explicitly
+# so it uses TIER1_MODEL instead of the CLI's config.yaml default.
+# Env-driven to mirror Tier 2's TIER2_MODEL pattern.
+TIER1_MODEL = os.environ.get("TIER1_MODEL", "deepseek/deepseek-v4-pro")
+def _tier1_model_args(reasoning_effort: "str | None" = None) -> list:
+    """Hermes CLI args for the Tier 1 director model.
+
+    reasoning_effort: optional level (none|minimal|low|medium|high|xhigh|max|
+    ultra) passed via --reasoning to tune DeepSeek V4 Pro's compute spend per
+    task type. Omitted/None keeps the configured default.
+    """
+    args = ["-m", TIER1_MODEL]
+    if reasoning_effort:
+        args += ["--reasoning", reasoning_effort]
+    return args
+
 # ── Self-Correction Engine ──
 _self_correction_imported = False
 _SelfCorrectionEngine = None
@@ -210,7 +227,7 @@ Output ONLY the JSON, no other text."""
 
     try:
         from hermes_bridge import run_hermes
-        result = run_hermes(["chat", "-q", prompt, "--quiet", "--pass-session-id"], timeout=60)
+        result = run_hermes(["chat", "-q", prompt, "--quiet", "--pass-session-id"] + _tier1_model_args(reasoning_effort="high"), timeout=60)
         response = result.get("response", "")
 
         # Parse JSON from response
@@ -791,7 +808,7 @@ class GoalEngine:
 
             prompt = f"You are the {agent} agent.\n\n## Task\n{desc or title}\n\nBe thorough and actionable. Write your output as structured markdown."
 
-            base_args = ["chat", "-q", prompt, "--quiet", "--pass-session-id", "--max-turns", "10"]
+            base_args = ["chat", "-q", prompt, "--quiet", "--pass-session-id", "--max-turns", "10"] + _tier1_model_args()
             args = build_resume_args(base_args, session_id)
 
             result = run_hermes(args, timeout=600)
@@ -1046,7 +1063,7 @@ class GoalEngine:
 
         try:
             from hermes_bridge import run_hermes
-            result = run_hermes(["chat", "-q", prompt, "--quiet", "--pass-session-id"], timeout=120)
+            result = run_hermes(["chat", "-q", prompt, "--quiet", "--pass-session-id"] + _tier1_model_args(), timeout=120)
             report_text = result.get("response", "")
 
             # Save report

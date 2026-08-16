@@ -93,6 +93,7 @@ class RoutingDecision:
     confidence: float  # 0.0–1.0
     reasoning: str
     engine: str
+    reasoning_effort: str = "medium"  # none|minimal|low|medium|high|xhigh|max|ultra
 
     def to_dict(self) -> dict:
         return {
@@ -101,7 +102,41 @@ class RoutingDecision:
             "confidence": self.confidence,
             "reasoning": self.reasoning,
             "engine": self.engine,
+            "reasoning_effort": self.reasoning_effort,
         }
+
+
+# Reasoning effort per task type — tunes the Tier 1 director's compute spend.
+# Strategic decomposition and architecture decisions get more reasoning;
+# mechanical state/triage and local-model execution get less.
+_REASONING_EFFORT_MAP = {
+    # Tier 1 — strategic
+    TaskType.GOAL_DECOMPOSE: "high",
+    TaskType.GOAL_CREATION: "medium",
+    TaskType.BACKLOG_MANAGEMENT: "low",
+    TaskType.STATE_UPDATE: "low",
+    TaskType.PROJECT_SETUP: "low",
+    TaskType.TASK_ROUTING: "low",
+    # Tier 2 — architecture
+    TaskType.ARCHITECTURE: "high",
+    TaskType.DESIGN_DECISION: "high",
+    TaskType.RESEARCH: "medium",
+    TaskType.CODE_GENERATION: "medium",
+    TaskType.CODE_REFACTOR: "medium",
+    TaskType.ARTIFACT_GENERATION: "medium",
+    # Tier 3 — execution (local model; effort not applied there)
+    TaskType.BUG_FIX: "low",
+    TaskType.TEST_FIX: "low",
+    TaskType.SYNTAX_FIX: "low",
+    TaskType.IMPORT_FIX: "low",
+    TaskType.SINGLE_FILE_EDIT: "low",
+    TaskType.TEST_EXECUTION: "low",
+}
+
+
+def _reasoning_effort_for(task_type: TaskType) -> str:
+    """Map a task type to a reasoning-effort level."""
+    return _REASONING_EFFORT_MAP.get(task_type, "medium")
 
 
 def classify_task(description: str, context: dict = None) -> TaskType:
@@ -211,6 +246,7 @@ def route_task(description: str, context: dict = None) -> RoutingDecision:
         confidence=confidence,
         reasoning=reasoning,
         engine=engine,
+        reasoning_effort=_reasoning_effort_for(task_type),
     )
 
 
