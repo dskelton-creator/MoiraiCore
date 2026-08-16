@@ -138,6 +138,34 @@ REPORTS_DIR = AGENT_OS_ROOT / "workspace" / "goal-reports"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 
+def _resolve_task_workdir(goal_id: str = "") -> str:
+    """Resolve a working directory to scope the Hermes agent to for a task.
+
+    Project-scoped goals run inside their project's src/ dir; everything else
+    runs in the shared workspace so agent-generated files land under the
+    platform root instead of the operator's home directory.
+    """
+    try:
+        if goal_id:
+            from project_chat import find_project_by_goal_id
+            proj = find_project_by_goal_id(goal_id)
+            if proj:
+                src = AGENT_OS_ROOT / "projects" / proj / "src"
+                if src.exists():
+                    return str(src)
+                proj_dir = AGENT_OS_ROOT / "projects" / proj
+                if proj_dir.exists():
+                    return str(proj_dir)
+    except Exception:
+        pass
+    workspace = AGENT_OS_ROOT / "workspace"
+    try:
+        workspace.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+    return str(workspace)
+
+
 # ── Goal persistence ───
 
 def load_goals() -> list:
@@ -808,7 +836,8 @@ class GoalEngine:
 
             prompt = f"You are the {agent} agent.\n\n## Task\n{desc or title}\n\nBe thorough and actionable. Write your output as structured markdown."
 
-            base_args = ["chat", "-q", prompt, "--quiet", "--pass-session-id", "--max-turns", "10"] + _tier1_model_args()
+            workdir = _resolve_task_workdir(goal_id)
+            base_args = ["chat", "-q", prompt, "--quiet", "--pass-session-id", "--max-turns", "10", "--in", workdir] + _tier1_model_args()
             args = build_resume_args(base_args, session_id)
 
             result = run_hermes(args, timeout=600)
