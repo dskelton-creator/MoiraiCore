@@ -44,6 +44,14 @@ def _fire(event: str, payload: dict) -> None:
             pass
 
 
+# ── Agent Working Method (10x discipline) ──
+_WORKING_METHOD = ""
+try:
+    from agent_working_method import WORKING_METHOD_PREAMBLE as _WORKING_METHOD
+except ImportError:
+    pass
+
+
 # ── Paths ──
 
 PROJECT_SPACE = Path(os.environ.get("PROJECT_SPACE", str(Path(__file__).resolve().parents[1] / "projects")))
@@ -143,7 +151,7 @@ def generate_code_via_gemini(task_description: str, file_path: str,
         if not is_gemini_available(config):
             return "", "Gemini API not available"
 
-        full_spec = f"## Task\n{task_description}\n\n## Target File\n{file_path}\n"
+        full_spec = f"{_WORKING_METHOD}\n\n## Task\n{task_description}\n\n## Target File\n{file_path}\n"
         if current_content:
             full_spec += f"\n## Current Content\n```\n{current_content}\n```\n"
         if context:
@@ -182,6 +190,7 @@ def generate_code_via_ollama(task_description: str, file_path: str,
         config.max_retries = max_iterations
 
         prompt = (
+            f"{_WORKING_METHOD}\n\n"
             f"## Task\n{task_description}\n\n"
             f"## File to modify\n`{file_path}`\n"
         )

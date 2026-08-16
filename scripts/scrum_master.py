@@ -42,6 +42,13 @@ import threading
 # ── Paths ──
 AGENT_OS_ROOT = Path(os.environ.get("AGENT_OS_ROOT", str(Path(__file__).resolve().parents[1])))
 
+# ── Agent Working Method (10x discipline) ──
+_WORKING_METHOD = ""
+try:
+    from agent_working_method import WORKING_METHOD_PREAMBLE as _WORKING_METHOD
+except ImportError:
+    pass
+
 # ── Enums ──
 
 
@@ -568,7 +575,7 @@ class ScrumMaster:
         unreachable or no key is set.
         """
         # Build description with retry feedback if this is a retry
-        description = f"{task.title}\n\n{task.description}"
+        description = f"{_WORKING_METHOD}\n\n{task.title}\n\n{task.description}"
         if task.current_iteration > 0 and task.evaluation_notes:
             description += f"\n\n=== PREVIOUS ATTEMPT FAILED — FIX THESE ISSUES ===\n{task.evaluation_notes}"
 
@@ -695,7 +702,9 @@ The Antigravity IDE with Gemini Pro should be used for this work.
         if task.current_iteration > 0 and task.evaluation_notes:
             retry_section = f"\n\n=== PREVIOUS ATTEMPT FAILED — FIX THESE ISSUES ===\n{task.evaluation_notes}\n"
 
-        return f"""# Implementation Plan for {task.title}
+        return f"""{_WORKING_METHOD}
+
+# Implementation Plan for {task.title}
 
 ## Task Description
 {description}{retry_section}
