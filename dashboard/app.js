@@ -1,0 +1,4423 @@
+const API = window.location.origin + '/api';
+
+// ── AUTH ──
+let authToken = localStorage.getItem('moirai_token');
+let authUser = JSON.parse(localStorage.getItem('moirai_user') || 'null');
+
+async function authFetch(path, opts) {
+  opts = opts || {};
+  opts.headers = opts.headers || {};
+  // API already includes the '/api' prefix, so strip any leading '/api' from
+  // the path to avoid doubling it into '/api/api/...' (which 404s).
+  if (path.startsWith('/api/')) path = path.slice(4);
+  else if (path === '/api') path = '/';
+  // Always read fresh token from localStorage (may have been set by login after page load)
+  const token = authToken || localStorage.getItem('moirai_token');
+  if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+  try {
+    const res = await fetch(API + path, opts);
+    if (res.status === 401) {
+      // Token expired — try refresh
+      const refreshToken = localStorage.getItem('moirai_refresh');
+      if (refreshToken) {
+        const refreshed = await authRefresh(refreshToken);
+        if (refreshed) {
+          const newToken = localStorage.getItem('moirai_token');
+          if (newToken) opts.headers['Authorization'] = 'Bearer ' + newToken;
+          return await (await fetch(API + path, opts)).json();
+        }
+      }
+      // Refresh failed (server restart, new secret) — clear stale tokens & login
+      localStorage.removeItem('moirai_token');
+      localStorage.removeItem('moirai_refresh');
+      localStorage.removeItem('moirai_user');
+      authToken = null;
+      // Remember which view the user was trying to access
+      const currentView = document.querySelector('.view.active');
+      if (currentView) localStorage.setItem('moirai_pending_view', currentView.id.replace('view-', ''));
+      authShowLogin();
+      return null;
+    }
+    return await res.json();
+  } catch(e) { return null; }
+}
+
+async function authLogin(username, password) {
+  const res = await fetch(API + '/auth/login', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({username, password})
+  });
+  const data = await res.json();
+  if (data.ok) {
+    authToken = data.access_token;
+    authUser = data.user;
+    localStorage.setItem('moirai_token', authToken);
+    localStorage.setItem('moirai_refresh', data.refresh_token);
+    localStorage.setItem('moirai_user', JSON.stringify(authUser));
+    authUpdateUI();
+    return true;
+  }
+  return data;
+}
+
+async function authRegister(username, password, displayName) {
+  const res = await fetch(API + '/auth/register', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({username, password, display_name: displayName})
+  });
+  const data = await res.json();
+  if (data.ok) {
+    authToken = data.access_token;
+    authUser = data.user;
+    localStorage.setItem('moirai_token', authToken);
+    localStorage.setItem('moirai_refresh', data.refresh_token);
+    localStorage.setItem('moirai_user', JSON.stringify(authUser));
+    authUpdateUI();
+    return {ok: true};
+  }
+  return data;
+}
+
+async function authRefresh(refreshToken) {
+  try {
+    const res = await fetch(API + '/auth/refresh', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({refresh_token: refreshToken})
+    });
+    const data = await res.json();
+    if (data.ok) {
+      authToken = data.access_token;
+      localStorage.setItem('moirai_token', authToken);
+      localStorage.setItem('moirai_refresh', data.refresh_token);
+      return true;
+    }
+  } catch(e) {}
+  return false;
+}
+
+function authLogout() {
+  localStorage.removeItem('moirai_token');
+  localStorage.removeItem('moirai_refresh');
+  localStorage.removeItem('moirai_user');
+  authToken = null;
+  authUser = null;
+  authShowLogin();
+}
+
+function authUpdateUI() {
+  const loginOverlay = document.getElementById('auth-login-overlay');
+  if (loginOverlay) loginOverlay.style.display = authToken ? 'none' : 'flex';
+  const userInfo = document.getElementById('auth-user-info');
+  if (userInfo && authUser) {
+    userInfo.textContent = '👤 ' + (authUser.display_name || authUser.username);
+    userInfo.style.display = 'block';
+  } else if (userInfo) {
+    userInfo.style.display = 'none';
+  }
+  const logoutBtn = document.getElementById('auth-logout-btn');
+  if (logoutBtn) logoutBtn.style.display = authToken ? 'inline-block' : 'none';
+  const loginBtn = document.getElementById('auth-login-btn');
+  if (loginBtn) loginBtn.style.display = authToken ? 'none' : 'inline-block';
+}
+
+function authShowLogin() {
+  const overlay = document.getElementById('auth-login-overlay');
+  if (overlay) overlay.style.display = 'flex';
+}
+
+function authHideLogin() {
+  const overlay = document.getElementById('auth-login-overlay');
+  if (overlay && authToken) overlay.style.display = 'none';
+}
+
+async function authDoLogin() {
+  const username = document.getElementById('auth-username').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const errEl = document.getElementById('auth-login-error');
+  errEl.style.display = 'none';
+  const result = await authLogin(username, password);
+  if (result === true) {
+    // Show welcome wizard on first login
+    if (!localStorage.getItem('moirai_welcome_done')) {
+      document.getElementById('welcome-wizard').style.display = 'flex';
+    } else {
+      // Restore the view the user was on before session expired
+      const pendingView = localStorage.getItem('moirai_pending_view');
+      localStorage.removeItem('moirai_pending_view');
+      if (pendingView) {
+        go(pendingView);
+      } else {
+        initDashboard();
+      }
+    }
+  } else {
+    errEl.textContent = result.message || 'Login failed';
+    errEl.style.display = 'block';
+  }
+}
+
+async function authDoRegister() {
+  const username = document.getElementById('auth-reg-username').value.trim();
+  const displayName = document.getElementById('auth-reg-display').value.trim();
+  const password = document.getElementById('auth-reg-password').value;
+  const errEl = document.getElementById('auth-reg-error');
+  errEl.style.display = 'none';
+  const result = await authRegister(username, password, displayName);
+  if (result.ok) {
+    initDashboard();
+  } else {
+    errEl.textContent = result.message || 'Registration failed';
+    errEl.style.display = 'block';
+  }
+}
+
+function authSwitchTab(tab) {
+  document.getElementById('auth-tab-login').style.display = tab === 'login' ? 'block' : 'none';
+  document.getElementById('auth-tab-register').style.display = tab === 'register' ? 'block' : 'none';
+  document.getElementById('auth-login-error').style.display = 'none';
+  document.getElementById('auth-reg-error').style.display = 'none';
+}
+
+// ═══ HOME VIEW ═══
+async function loadHome() {
+  try {
+    const d = await authFetch('/home-stats');
+    if (!d) return;
+    // Greeting
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+    document.getElementById('home-greeting').textContent = greeting;
+    document.getElementById('home-date').textContent = new Date().toLocaleDateString('en-AU', {weekday:'long',year:'numeric',month:'long',day:'numeric'});
+    // Stats
+    document.getElementById('home-active-goals').textContent = d.active_goals || 0;
+    document.getElementById('home-total-outputs').textContent = d.total_outputs || 0;
+    document.getElementById('home-vault-files').textContent = d.vault_files || 0;
+    document.getElementById('home-agents').textContent = d.agents_count || 0;
+    // Recent outputs
+    const outputsEl = document.getElementById('home-outputs');
+    if (d.recent_outputs && d.recent_outputs.length) {
+      outputsEl.innerHTML = d.recent_outputs.map(function(o) {
+        const mtime = new Date(o.mtime * 1000).toLocaleDateString('en-AU', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+        return '<div class="home-output-item" onclick="go(\'outputs\')">' +
+          '<span class="home-output-icon">' + (o.icon || '📄') + '</span>' +
+          '<span class="home-output-name">' + o.name + '</span>' +
+          '<span class="home-output-meta">' + mtime + '</span>' +
+        '</div>';
+      }).join('');
+    } else {
+      outputsEl.innerHTML = '<div class="home-empty">No outputs yet</div>';
+    }
+    // Active goals
+    const goalsEl = document.getElementById('home-goals');
+    try {
+      const goalsResp = await authFetch('/goals');
+      if (goalsResp && goalsResp.goals) {
+        const active = goalsResp.goals.filter(function(g){ return g.status === 'in_progress' || g.status === 'decomposed'; }).slice(0, 5);
+        if (active.length) {
+          goalsEl.innerHTML = active.map(function(g) {
+            const statusClass = g.status === 'completed' ? 'completed' : 'active';
+            const pct = g.progress || Math.round(((g.tasks||[]).filter(function(t){return t.status==='completed'}).length / Math.max(1,(g.tasks||[]).length)) * 100);
+            return '<div class="home-goal-item" onclick="go(\'goals\')">' +
+              '<div class="home-goal-progress">' +
+                '<div class="home-goal-title">' + (g.title || g.name || 'Untitled') + '</div>' +
+                '<div class="home-goal-meta">' + (g.tasks||[]).length + ' tasks · ' + pct + '%</div>' +
+              '</div>' +
+              '<span class="home-goal-status ' + statusClass + '">' + g.status + '</span>' +
+            '</div>';
+          }).join('');
+        } else {
+          goalsEl.innerHTML = '<div class="home-empty">No active goals</div>';
+        }
+      }
+    } catch(e) {
+      goalsEl.innerHTML = '<div class="home-empty">Unable to load goals</div>';
+    }
+    // System status
+    try {
+      const tierResp = await authFetch('/tier3/config');
+      if (tierResp) {
+        const ollamaDot = document.getElementById('home-ollama-dot');
+        const ollamaStatus = document.getElementById('home-ollama-status');
+        const tier3Dot = document.getElementById('home-tier3-dot');
+        const tier3Model = document.getElementById('home-tier3-model');
+        if (ollamaDot) ollamaDot.style.background = tierResp.ollama_available ? 'var(--green)' : 'var(--red)';
+        if (ollamaDot) ollamaDot.style.boxShadow = tierResp.ollama_available ? '0 0 6px var(--green)' : 'none';
+        if (ollamaStatus) ollamaStatus.textContent = tierResp.ollama_available ? 'Available' : 'Offline';
+        if (tier3Dot) tier3Dot.style.background = tierResp.ollama_worker_model ? 'var(--green)' : 'var(--text-dim)';
+        if (tier3Dot) tier3Dot.style.boxShadow = tierResp.ollama_worker_model ? '0 0 6px var(--green)' : 'none';
+        if (tier3Model) tier3Model.textContent = tierResp.ollama_worker_model ? tierResp.ollama_worker_model.split('/').pop().slice(0, 30) : 'Not configured';
+      }
+    } catch(e) { /* status indicators silently degrade */ }
+  } catch(e) {
+    console.error('Home view load failed:', e);
+  }
+}
+
+// ═══ DASHBOARD INIT (called on page load and after login) ═══
+async function initDashboard() {
+  // Hide login overlay if token is valid
+  authHideLogin();
+  // Load all dashboard data in parallel
+  await Promise.all([
+    loadHome(),
+    loadStats(),
+    loadRecentActivity(),
+    loadGoals(),
+  ]);
+  // Load non-critical data after
+  loadDaily();
+  loadContext();
+  renderKanban();
+  loadTasks();
+  loadNotes('all');
+}
+
+let kanban = {backlog:[],progress:[],review:[],done:[]}, goals = [];
+try { kanban = JSON.parse(localStorage.getItem('aos-kanban')) || kanban; } catch(e){}
+
+function toggleSidebar() {
+  document.querySelector('.sidebar').classList.toggle('open');
+}
+
+function toggleAdmin() {
+  const sub = document.getElementById('nav-admin-sub');
+  const caret = document.getElementById('admin-caret');
+  if (!sub) return;
+  const isHidden = sub.style.display === 'none' || getComputedStyle(sub).display === 'none';
+  sub.style.display = isHidden ? 'block' : 'none';
+  if (caret) caret.classList.toggle('open', isHidden);
+}
+
+
+
+function go(view, el) {
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  // Chat is the landing — loads Jarvis chat as the Slack-like primary interface
+  if (view === 'chat') {
+    view = 'jarvis';  // Chat = Jarvis under the hood
+    document.getElementById('view-jarvis').classList.add('active');
+    loadJarvis();
+  }
+  var viewEl = document.getElementById('view-'+view);
+  if (viewEl) viewEl.classList.add('active');
+  if(el) el.classList.add('active');
+  if(window.innerWidth <= 1024) document.querySelector('.sidebar').classList.remove('open');
+  if(view==='dashboard') { loadHome(); }
+  if(view==='jarvis') { loadJarvis(); }
+  if(view==='projects') { loadProjects(); }
+  if(view==='outputs') { loadOutputs(); }
+  const t = {dashboard:'Overview',chat:'Chat',jarvis:'Chat',projects:'Projects',kanban:'Kanban',goals:'Goals',graph:'Knowledge Graph',agents:'Agents',notes:'Notes',tasks:'Tasks',outputs:'Outputs',reports:'Reports',systemlogs:'System Logs',audit:'Audit Trail',settings:'Settings',pipeline:'Pipeline',tier3:'3-Tier Pipeline',entities:'Entity Timeline'};
+  document.getElementById('page-title').textContent = t[view]||view;
+  if(view==='kanban') loadKanban();
+  if(view==='graph') setTimeout(function(){ loadGraph(); }, 100);
+  if(view==='notes') loadNotes('all');
+  if(view==='goals') { loadGoals(); loadStats(); }
+  if(view==='tasks') loadTasks();
+  if(view==='agents') { channelsLoadAgentsForRegistry(); loadAgentRegistry(); }
+  if(view==='systemlogs') { loadSystemLogs(); }
+  if(view==='audit') { loadAudit(); }
+  if(view==='pipeline') { loadPipeline(); }
+  if(view==='tier3') { loadTier3(); }
+  if(view==='entities') { loadEntities(); }
+}
+
+// ═══ PIPELINE CONTRACTS VIEW (Feature 7) ═══
+function loadPipeline() {
+  var statusEl = document.getElementById('pipeline-status');
+  var contractsEl = document.getElementById('pipeline-contracts');
+  var violEl = document.getElementById('pipeline-violations');
+  var violCount = document.getElementById('pipeline-viol-count');
+  if (statusEl) statusEl.innerHTML = '<div style="color:var(--text-dim);font-size:12px">Loading…</div>';
+  Promise.all([
+    authFetch('/api/pipeline/contracts').then(function(d){ return d && d.contracts ? d.contracts : {}; }),
+    authFetch('/api/pipeline/violations?limit=100').then(function(d){ return d && d.violations ? d.violations : []; }),
+    authFetch('/api/pipeline/status').then(function(d){ return d && d.goals ? d.goals : []; }).catch(function(){ return []; })
+  ]).then(function(res) {
+    var contracts = res[0], violations = res[1], goals = res[2];
+    // Status strip: contract count + violation count + any goal in contract_error
+    var vcount = violations.length;
+    var errGoals = goals.filter(function(g){ return g.status === 'contract_error'; });
+    if (statusEl) {
+      statusEl.innerHTML = [
+        ['Contracts', Object.keys(contracts).length],
+        ['Stages gated', 'goal→decomp→task→output→verify→merge'],
+        ['Violations', '<span style="color:' + (vcount ? 'var(--red)' : 'var(--green)') + '">' + vcount + '</span>'],
+        ['Goals w/ contract error', '<span style="color:' + (errGoals.length ? 'var(--red)' : 'var(--green)') + '">' + errGoals.length + '</span>']
+      ].map(function(c) {
+        return '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px"><div style="font-size:14px;font-weight:700">' + c[1] + '</div><div style="font-size:10px;color:var(--text-dim)">' + c[0] + '</div></div>';
+      }).join('');
+    }
+    // Contract definitions
+    if (contractsEl) {
+      var stageOrder = ['decomposition','subtask','task_card','task_output','verification','merge_request'];
+      contractsEl.innerHTML = stageOrder.filter(function(s){ return contracts[s]; }).map(function(stage) {
+        var fields = contracts[stage];
+        var rows = Object.keys(fields).map(function(f) {
+          var spec = fields[f];
+          var req = spec.required ? '<span style="color:var(--red)">required</span>' : 'optional';
+          var extra = [];
+          if (spec.allowed) extra.push('∈ {' + spec.allowed.join(', ') + '}');
+          if (spec.type) extra.push(spec.type);
+          if (spec.min_len != null) extra.push('min_len ' + spec.min_len);
+          if (spec.min_items != null) extra.push('min_items ' + spec.min_items);
+          return '<div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0;font-size:11px;border-bottom:1px solid var(--border)">' +
+            '<span style="font-family:monospace">' + f + '</span>' +
+            '<span style="color:var(--text-dim);text-align:right">' + req + (extra.length ? ' · ' + extra.join(' · ') : '') + '</span></div>';
+        }).join('');
+        return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px">' +
+          '<div style="font-size:12px;font-weight:600;margin-bottom:4px">📍 ' + stage + '</div>' + rows + '</div>';
+      }).join('');
+    }
+    // Violations
+    if (violEl) {
+      if (!vcount) {
+        violEl.innerHTML = '<div style="color:var(--text-dim);padding:12px">No contract violations recorded. All pipeline handoffs have passed their structural gates. ✅</div>';
+      } else {
+        if (violCount) violCount.textContent = '(' + vcount + ')';
+        violEl.innerHTML = violations.slice().reverse().map(function(v) {
+          var ts = (v.ts || '').replace('T', ' ').slice(0, 19);
+          var errs = (v.errors || []).map(function(e){ return '• ' + e; }).join('<br>');
+          var ctx = v.context || {};
+          return '<div style="padding:8px 10px;border-left:3px solid var(--red);background:var(--surface);border-radius:0 8px 8px 0;margin-bottom:8px">' +
+            '<div style="font-size:11px;color:var(--text-dim)">' + ts + ' · stage <strong>' + v.stage + '</strong>' + (ctx.goal_id ? ' · ' + ctx.goal_id : '') + '</div>' +
+            '<div style="font-size:11.5px;margin-top:4px;color:var(--red)">' + errs + '</div></div>';
+        }).join('');
+      }
+    }
+  }).catch(function(err) {
+    if (statusEl) statusEl.innerHTML = '<div style="color:var(--red)">⚠️ ' + (err.message || err) + '</div>';
+  });
+}
+
+// ═══ 3-TIER PIPELINE ADMIN ═══
+async function loadTier3() {
+  try {
+    const d = await authFetch('/tier3/config');
+    renderTier3(d || {});
+  } catch(e) {
+    document.getElementById('tier3-config').innerHTML = '<div style="color:var(--red);padding:12px">⚠️ Error loading config: ' + e.message + '</div>';
+  }
+}
+
+function renderTier3(d) {
+  // Tier overview cards
+  const overviewEl = document.getElementById('tier3-overview');
+  if (overviewEl) {
+    const tiers = [
+      {icon:'🎯', title:'Tier 1 — ScrumMaster', desc: d.tier1 || 'MoiraiCore (Hermes model)', color:'var(--green)'},
+      {icon:'🧠', title:'Tier 2 — Gemini Pro', desc: d.tier2 || 'Antigravity/Gemini API', color:'var(--yellow)'},
+      {icon:'🤖', title:'Tier 3 — Local Ollama', desc: d.tier3 || 'Ollama (local model)', color:'var(--accent)'},
+    ];
+    overviewEl.innerHTML = tiers.map(function(t) {
+      return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;flex-direction:column;gap:6px">' +
+        '<div style="font-size:18px">' + t.icon + '</div>' +
+        '<div style="font-size:13px;font-weight:600">' + t.title + '</div>' +
+        '<div style="font-size:11px;color:var(--text-dim)">' + t.desc + '</div>' +
+        '<div style="margin-top:4px;display:flex;gap:4px">' +
+        '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + t.color + '"></span>' +
+        '<span style="font-size:10px;color:var(--text-dim)">Active</span></div></div>';
+    }).join('');
+  }
+
+  // Tier 3 config details
+  const configEl = document.getElementById('tier3-config');
+  if (configEl) {
+    var items = [
+      {label:'ollama_worker.py model', value: d.ollama_worker_model || '—', mono:true},
+      {label:'hermes_bridge.py fallback', value: d.hermes_bridge_model || '—', mono:true},
+      {label:'server.py fallback', value: d.server_route_model || '—', mono:true},
+      {label:'Ollama available', value: d.ollama_available ? '✅ Yes' : '❌ No'},
+    ];
+    configEl.innerHTML = items.map(function(i) {
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:var(--bg);border-radius:6px">' +
+        '<span style="font-size:11px;color:var(--text-dim)">' + i.label + '</span>' +
+        '<span style="font-size:12px;' + (i.mono ? 'font-family:monospace;font-size:11px;' : '') + 'max-width:60%;text-align:right;word-break:break-all">' + i.value + '</span></div>';
+    }).join('');
+  }
+
+  // Available models
+  const modelsEl = document.getElementById('tier3-models');
+  if (modelsEl) {
+    const models = (d.pulled_models || []);
+    if (models.length === 0) {
+      modelsEl.innerHTML = '<div style="color:var(--text-dim);font-size:12px;padding:12px;text-align:center">No models pulled yet, or Ollama unavailable</div>';
+    } else {
+      modelsEl.innerHTML = models.map(function(m) {
+        const size = m.size ? (m.size / 1e9).toFixed(1) + ' GB' : '—';
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--bg);border-radius:6px">' +
+          '<span style="font-size:12px;font-family:monospace">' + m.name + '</span>' +
+          '<span style="font-size:11px;color:var(--text-dim)">' + size + '</span></div>';
+      }).join('');
+    }
+  }
+}
+
+async function doTier3Switch() {
+  const input = document.getElementById('tier3-model-input');
+  const btn = document.getElementById('tier3-switch-btn');
+  const status = document.getElementById('tier3-switch-status');
+  const log = document.getElementById('tier3-log');
+  const logPre = document.getElementById('tier3-log-pre');
+
+  const modelName = (input && input.value.trim()) || '';
+  if (!modelName) {
+    if (status) { status.textContent = '⚠️ Please enter a model name.'; status.style.display = 'block'; status.style.color = 'var(--yellow)'; }
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = '⬇️ Pulling model…'; }
+  if (status) { status.textContent = '⬇️ Pulling model — this can take several minutes for large models…'; status.style.display = 'block'; status.style.color = 'var(--text-dim)'; }
+  if (log) log.style.display = 'block';
+  if (logPre) logPre.textContent += '> Starting: ollama pull ' + modelName + '\n';
+
+  try {
+    const d = await authFetch('/tier3/switch', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({model_name: modelName, timeout: 900})
+    });
+    if (logPre && d && d.steps) {
+      d.steps.forEach(function(s) {
+        logPre.textContent += '> [' + s.step + '] ' + (s.ok ? '✅ OK' : '❌ Failed') + '\n';
+        if (s.output) logPre.textContent += '  Output: ' + s.output.substring(0, 200) + '\n';
+        if (s.error) logPre.textContent += '  Error: ' + s.error + '\n';
+      });
+      logPre.textContent += '> Model: ' + (d.model_name || modelName) + '\n';
+    }
+    if (d && d.ok) {
+      if (status) { status.textContent = '✅ Model switched successfully! Reloading config…'; status.style.color = 'var(--green)'; }
+      loadTier3();
+    } else {
+      if (status) { status.textContent = '❌ Switch failed: ' + ((d && d.error) || (d && d.steps && d.steps[0] && d.steps[0].error) || 'Unknown error'); status.style.color = 'var(--red)'; }
+    }
+  } catch(e) {
+    if (status) { status.textContent = '❌ Error: ' + e.message; status.style.color = 'var(--red)'; }
+    if (logPre) logPre.textContent += '> Error: ' + e.message + '\n';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⬇️ Pull & Switch Model'; }
+  }
+}
+
+// ═══ SYSTEM LOGS VIEW ═══
+var sysLogFilter = 'all'; // all | gateway | error
+var sysLogEntries = [];
+var sysLogVisible = []; // currently-rendered (filtered) entries, for row-click lookup
+
+function loadSystemLogs(){
+  var el = document.getElementById('syslog-content');
+  el.innerHTML = '<div style="color:var(--text-dim);padding:20px;text-align:center">Loading logs…</div>';
+  var filterEl = document.getElementById('syslog-filter-info');
+  if(filterEl) filterEl.textContent = 'Loading…';
+  authFetch('/api/logs').then(function(d){
+    if(!d || !d.ok){
+      el.innerHTML = '<div style="color:var(--red);padding:20px">⚠️ ' + (d && d.error ? d.error : 'Failed to load logs') + '</div>';
+      return;
+    }
+    sysLogEntries = d.entries || [];
+    var info = document.getElementById('syslog-filter-info');
+    if(info){
+      var src = [];
+      if(d.sources && d.sources.gateway) src.push('gateway');
+      if(d.sources && d.sources.error) src.push('error');
+      var win = d.window_days ? ' · last ' + d.window_days + ' days' : '';
+      info.textContent = d.total + ' entries · sources: ' + (src.join(', ') || 'none') + win;
+    }
+    renderSystemLogs();
+    // Newest logs are first — keep the view scrolled to the top.
+    var el2 = document.getElementById('syslog-content');
+    if(el2) el2.scrollTop = 0;
+  }).catch(function(err){
+    el.innerHTML = '<div style="color:var(--red);padding:20px">⚠️ ' + err.message + '</div>';
+  });
+}
+
+function renderSystemLogs(){
+  var pre = document.getElementById('syslog-pre');
+  if(!pre){
+    // The container may have been reset to a "Loading…" message, which removes
+    // the <pre>. Recreate it inside syslog-content so rendering always works.
+    var content = document.getElementById('syslog-content');
+    if(!content) return;
+    content.innerHTML = '<pre id="syslog-pre" style="margin:0;font-family:\'SF Mono\',Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-all"></pre>';
+    pre = document.getElementById('syslog-pre');
+    if(!pre) return;
+  }
+  var filter = sysLogFilter;
+  var entries = filter === 'all' ? sysLogEntries : sysLogEntries.filter(function(e){ return e.source === filter; });
+  if(!entries.length){
+    pre.innerHTML = '<span style="color:var(--text-dim)">No log entries found.</span>';
+    return;
+  }
+  // Keep the currently-visible (filtered) entries so a row click can look up
+  // the full entry by index for the detail popup.
+  sysLogVisible = entries;
+  var html = '';
+  entries.forEach(function(e, idx){
+    var line = e.line
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;');
+    var color = e.source === 'error' ? 'var(--red)' : 'var(--accent2)';
+    var label = e.source === 'error' ? 'ERR' : 'GW ';
+    html += '<div class="syslog-line" onclick="showSysLogDetail(' + idx + ')" title="Click to view full log details" style="display:flex;gap:10px;padding:2px 4px;white-space:pre-wrap;word-break:break-all;font-size:11.5px;line-height:1.5;cursor:pointer;border-radius:4px" onmouseover="this.style.background=\'var(--surface2)\'" onmouseout="this.style.background=\'transparent\'">';
+    html += '<span style="color:' + color + ';font-weight:600;min-width:30px;flex-shrink:0">' + label + '</span>';
+    html += '<span style="color:var(--text-dim);min-width:18px;flex-shrink:0">' + e.source.charAt(0).toUpperCase() + '</span>';
+    html += '<span>' + line + '</span>';
+    html += '</div>\n';
+  });
+  pre.innerHTML = html;
+  // Update counts
+  var totalEl = document.getElementById('syslog-count-all');
+  var gwEl = document.getElementById('syslog-count-gw');
+  var errEl = document.getElementById('syslog-count-err');
+  if(totalEl) totalEl.textContent = sysLogEntries.length;
+  if(gwEl) gwEl.textContent = sysLogEntries.filter(function(e){ return e.source === 'gateway'; }).length;
+  if(errEl) errEl.textContent = sysLogEntries.filter(function(e){ return e.source === 'error'; }).length;
+}
+
+function setLogFilter(filter){
+  sysLogFilter = filter;
+  document.querySelectorAll('.syslog-filter-btn').forEach(function(b){ b.classList.remove('active'); });
+  var btn = document.getElementById('syslog-btn-' + filter);
+  if(btn) btn.classList.add('active');
+  renderSystemLogs();
+}
+
+function _escHtml(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+// Parse a raw log line into structured fields (best-effort).
+function parseSysLogLine(line){
+  var out = { timestamp: null, level: null, logger: null, message: line };
+  // e.g. "2026-07-12 22:10:40,110 INFO gateway.run: message here"
+  var m = line.match(/^(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)\s+([A-Z]+)\s+([\w.\-]+):\s?([\s\S]*)$/);
+  if(m){
+    out.timestamp = m[1]; out.level = m[2]; out.logger = m[3]; out.message = m[4];
+    return out;
+  }
+  // Timestamp + level only (no logger)
+  var m2 = line.match(/^(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)\s+([A-Z]+)\s+([\s\S]*)$/);
+  if(m2){ out.timestamp = m2[1]; out.level = m2[2]; out.message = m2[3]; return out; }
+  return out;
+}
+
+function showSysLogDetail(idx){
+  var e = sysLogVisible[idx];
+  if(!e) return;
+  var p = parseSysLogLine(e.line);
+  var srcLabel = e.source === 'error' ? 'Error log (gateway.error.log)' : 'Gateway log (gateway.log)';
+  var srcColor = e.source === 'error' ? 'var(--red)' : 'var(--accent2)';
+  var lvlColor = p.level === 'ERROR' || p.level === 'CRITICAL' ? 'var(--red)'
+    : (p.level === 'WARNING' || p.level === 'WARN' ? 'var(--accent)' : 'var(--accent2)');
+  function row(k, v, vColor){
+    if(v == null || v === '') return '';
+    return '<div style="display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">' +
+      '<div style="min-width:90px;color:var(--text-dim);font-size:11px">' + k + '</div>' +
+      '<div style="flex:1;font-size:12px' + (vColor ? (';color:' + vColor) : '') + '">' + _escHtml(v) + '</div></div>';
+  }
+  var meta =
+    row('Source', srcLabel, srcColor) +
+    row('Timestamp', p.timestamp) +
+    row('Level', p.level, lvlColor) +
+    row('Logger', p.logger);
+  var overlay = document.getElementById('syslog-detail-overlay');
+  if(!overlay){
+    overlay = document.createElement('div');
+    overlay.id = 'syslog-detail-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+    overlay.onclick = function(ev){ if(ev.target === overlay) closeSysLogDetail(); };
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML =
+    '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);max-width:800px;width:100%;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.5)">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)">' +
+        '<h3 style="margin:0;font-size:15px">📋 Log Entry Details</h3>' +
+        '<button class="btn small" onclick="closeSysLogDetail()">✕ Close</button>' +
+      '</div>' +
+      '<div style="padding:14px 18px;overflow-y:auto">' +
+        meta +
+        '<div style="margin-top:14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
+          '<div style="color:var(--text-dim);font-size:11px">Raw entry</div>' +
+          '<button class="btn small" onclick="copySysLogRaw()">⧉ Copy raw</button>' +
+        '</div>' +
+        '<pre id="syslog-detail-raw" style="margin:0;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px;font-family:\'SF Mono\',Menlo,Consolas,monospace;font-size:11.5px;white-space:pre-wrap;word-break:break-all;max-height:40vh;overflow-y:auto">' + _escHtml(e.line) + '</pre>' +
+      '</div>' +
+    '</div>';
+  overlay.style.display = 'flex';
+  window._sysLogDetailRaw = e.line;
+}
+
+function closeSysLogDetail(){
+  var overlay = document.getElementById('syslog-detail-overlay');
+  if(overlay) overlay.style.display = 'none';
+}
+
+function copySysLogRaw(){
+  var txt = window._sysLogDetailRaw || '';
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(function(){ if(typeof toast==='function') toast('Copied raw log entry'); });
+  }
+}
+
+// Close the detail popup on Escape.
+document.addEventListener('keydown', function(ev){
+  if(ev.key === 'Escape') closeSysLogDetail();
+});
+
+// ═══ DIAGRAMS (Excalidraw) VIEW ═══
+var excaliApp = null;       // Excalidraw imperative handle
+var excaliMounted = false;
+var excaliCurrentName = null; // name of the diagram loaded in the editor, or null for new/unsaved
+var excaliDirty = false;
+var excaliSuppressDirty = false; // set true while programmatically loading, to ignore the onChange echo
+
+function diagramStatus(msg){ var s = document.getElementById('diagram-status'); if(s) s.textContent = msg; }
+
+function ensureExcalidraw(){
+  if(excaliMounted) return true;
+  var host = document.getElementById('excalidraw-host');
+  if(!host){ diagramStatus('Editor host not found.'); return false; }
+  if(typeof window.ExcalidrawLib === 'undefined'){
+    diagramStatus('⚠️ Excalidraw failed to load (vendor bundle missing).');
+    return false;
+  }
+  // Excalidraw 0.17.x exposes the <Excalidraw> React component (not a render()
+  // function). Mount it with ReactDOM and capture the imperative API via ref.
+  if(typeof window.React === 'undefined' || typeof window.ReactDOM === 'undefined'){
+    diagramStatus('⚠️ React/ReactDOM not loaded — cannot mount Excalidraw.');
+    return false;
+  }
+  try{
+    var React = window.React, ReactDOM = window.ReactDOM;
+    var Excalidraw = window.ExcalidrawLib.Excalidraw;
+    if(typeof Excalidraw === 'undefined'){
+      diagramStatus('⚠️ Excalidraw component missing from bundle.');
+      return false;
+    }
+    ReactDOM.render(
+      React.createElement(Excalidraw, {
+        excalidrawAPI: function(api){ excaliApp = api; excaliMounted = true; diagramStatus('Editor ready — draw, then 💾 Save'); },
+        initialData: { appState: { viewBackgroundColor: '#1b1b1b' }, scrollToContent: true },
+        onChange: function(){
+          if(excaliSuppressDirty) return;  // ignore echo from programmatic load
+          excaliDirty = true;
+          if(excaliCurrentName) diagramStatus('Editing: ' + excaliCurrentName + ' (unsaved changes)');
+          else diagramStatus('Unsaved new diagram — click 💾 Save');
+        }
+      }),
+      host
+    );
+    return true;
+  }catch(err){
+    diagramStatus('⚠️ Failed to mount Excalidraw: ' + err.message);
+    return false;
+  }
+}
+
+function loadDiagramList(selected){
+  authFetch('/api/diagrams', { method: 'GET' }).then(function(d){
+    var sel = document.getElementById('diagram-select');
+    if(!sel) return;
+    sel.innerHTML = '<option value="">— New / unsaved —</option>';
+    (d.diagrams || []).forEach(function(item){
+      var o = document.createElement('option');
+      o.value = item.name;
+      o.textContent = (item.title || item.name) + ' (' + item.elements + ' els)';
+      sel.appendChild(o);
+    });
+    if(selected) sel.value = selected;
+  }).catch(function(err){ diagramStatus('Could not load diagram list: ' + err.message); });
+}
+
+function loadSelectedDiagram(){
+  var sel = document.getElementById('diagram-select');
+  if(!sel) return;
+  var name = sel.value;
+  if(!name){ newDiagram(); return; }
+  function apply(){
+    // The imperative API is delivered asynchronously via the excalidrawAPI
+    // callback — if it isn't ready yet, retry shortly (editor still mounting).
+    if(!ensureExcalidraw() || !excaliApp){ setTimeout(apply, 150); return; }
+    authFetch('/api/diagrams/' + encodeURIComponent(name), { method: 'GET' })
+      .then(function(d){
+        if(!d || !d.ok){ diagramStatus('Diagram not found.'); return; }
+        excaliSuppressDirty = true;
+        // The .excalidraw file already carries Excalidraw's full element schema
+        // (versionNonce, seed, containerId/boundElements bindings, …), so it loads
+        // and renders correctly — including centred bound text — without conversion.
+        var els = d.data.elements || [];
+        try {
+          excaliApp.updateScene({ elements: els });
+        } catch(e){ diagramStatus('Could not render diagram: ' + e.message); excaliSuppressDirty = false; return; }
+        // appState update is best-effort — never let it abort the load.
+        try {
+          excaliApp.updateAppState(Object.assign({}, d.data.appState || {}, { viewBackgroundColor: '#1b1b1b' }));
+        } catch(e){ /* non-fatal */ }
+        excaliCurrentName = name;
+        excaliDirty = false;
+        diagramStatus('Loaded: ' + (d.data.title || name));
+        // Re-enable dirty tracking after the load echo settles.
+        setTimeout(function(){ excaliSuppressDirty = false; }, 300);
+      })
+      .catch(function(err){ diagramStatus('Could not load diagram: ' + err.message); });
+  }
+  apply();
+}
+
+function newDiagram(){
+  if(excaliApp){
+    excaliApp.updateScene({ elements: [] });
+  }
+  excaliCurrentName = null;
+  excaliDirty = false;
+  var sel = document.getElementById('diagram-select'); if(sel) sel.value = '';
+  diagramStatus('New diagram — click 💾 Save when ready');
+}
+
+function promptSaveDiagram(){
+  if(!ensureExcalidraw()) return;
+  var def = excaliCurrentName || ('diagram-' + new Date().toISOString().slice(0,10) + '.excalidraw');
+  var name = window.prompt('Save diagram as (filename, .excalidraw added if needed):', def);
+  if(!name) return;
+  name = name.trim();
+  if(!name) return;
+  var elements = excaliApp ? excaliApp.getSceneElements() : [];
+  var appState = excaliApp ? excaliApp.getAppState() : {};
+  var payload = {
+    name: name,
+    title: name.replace(/\.excalidraw$/, ''),
+    data: { type: 'excalidraw', version: 2, source: 'moiraicore', elements: elements, appState: appState, files: {} }
+  };
+  authFetch('/api/diagrams', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    .then(function(d){
+      if(d && d.ok){
+        excaliCurrentName = d.name;
+        excaliDirty = false;
+        diagramStatus('Saved: ' + d.name);
+        loadDiagramList(d.name);
+      } else {
+        diagramStatus('Save failed: ' + ((d && d.error) || 'unknown'));
+      }
+    })
+    .catch(function(err){ diagramStatus('Save error: ' + err.message); });
+}
+
+function downloadDiagram(){
+  if(!excaliApp){ diagramStatus('Editor not ready.'); return; }
+  var elements = excaliApp.getSceneElements();
+  var appState = excaliApp.getAppState();
+  var data = { type: 'excalidraw', version: 2, source: 'moiraicore', elements: elements, appState: appState, files: {} };
+  var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = (excaliCurrentName || 'diagram') + '.excalidraw';
+  a.click();
+  URL.revokeObjectURL(url);
+  diagramStatus('Exported ' + a.download);
+}
+
+function deleteDiagram(){
+  var sel = document.getElementById('diagram-select');
+  if(!sel || !sel.value){ diagramStatus('Select a saved diagram to delete.'); return; }
+  var name = sel.value;
+  if(!window.confirm('Delete diagram "' + name + '"? This cannot be undone.')) return;
+  authFetch('/api/diagrams/' + encodeURIComponent(name), { method: 'DELETE' })
+    .then(function(d){
+      if(d && d.ok){ diagramStatus('Deleted ' + name); newDiagram(); loadDiagramList(); }
+      else diagramStatus('Delete failed: ' + ((d && d.error) || 'unknown'));
+    })
+    .catch(function(err){ diagramStatus('Delete error: ' + err.message); });
+}
+
+// Mount the editor lazily when the Diagrams view is first opened.
+var _origGoDiagrams = null;
+var _diagramsBooted = false;
+function bootDiagramsOnce(){
+  if(_diagramsBooted) return;
+  _diagramsBooted = true;
+  ensureExcalidraw();
+  loadDiagramList();
+}
+
+
+(function(){
+  var wfNodes=[], wfEdges=[], wfSel=null, wfIdCtr=1, wfUnsaved=false, wfCurId=null;
+  var wfPanX=0, wfPanY=0, wfZoom=1, wfPanning=false, wfPanSX=0, wfPanSY=0;
+  var wfDragNode=null, wfDragOX=0, wfDragOY=0;
+
+  var NC={trigger:'#fbbf24',agent:'#7c5bf5',action:'#5b9bf5',condition:'#f472b6',delay:'#8888a0',merge:'#8888a0',output:'#4ade80'};
+  var NL={trigger:'⚡ Trigger',agent:'🤖 Agent',action:'⚙️ Action',condition:'🔀 Condition',delay:'⏱ Delay',merge:'⏉ Merge',output:'📤 Output'};
+  var ND={trigger:{trigger_type:'manual',schedule:'',watch_path:''},agent:{agent:'hermes',prompt:'',context:'',timeout:300},action:{action_type:'http',url:'',method:'GET',headers:'',body:'',command:'',file_path:'',message:''},condition:{expression:'',field:'',operator:'==',value:''},delay:{seconds:10},merge:{mode:'wait-all'},output:{save_to:''}};
+
+  function wfInit(){wfLoadList();}
+  function wfLoadList(){
+    authFetch('/workflows').then(function(d){
+      if(!d||!d.workflows)return;
+      var sel=document.getElementById('wf-selector');
+      sel.innerHTML='<option value="">— Select workflow —</option>';
+      d.workflows.forEach(function(w){sel.innerHTML+='<option value="'+w.id+'">'+w.name+' ('+w.nodes+' nodes)</option>';});
+      var b=document.getElementById('nav-wf-count');if(b)b.textContent=d.workflows.length;
+    });
+  }
+  function wfNew(){
+    wfNodes=[];wfEdges=[];wfSel=null;wfCurId=null;wfIdCtr=1;wfUnsaved=false;wfPanX=0;wfPanY=0;wfZoom=1;
+    wfRender();wfLog('info','New workflow. Drag nodes from palette.');
+    document.getElementById('wf-selector').value='';
+    document.getElementById('wf-unsaved').style.display='none';
+    document.getElementById('wf-status').textContent='';
+  }
+  function wfSave(){
+    if(!wfNodes.length){wfLog('warn','Nothing to save.');return;}
+    var name=prompt('Workflow name:',wfCurId||'');if(!name)return;
+    var edges=wfEdges.map(function(e){return{id:e.id||('e'+wfIdCtr++),source:e.source,target:e.target,sourceHandle:e.sourceHandle||'out',targetHandle:e.targetHandle||'in'};});
+    var wf={id:wfCurId||('wf-'+Date.now().toString(36)),name:name,description:'',
+      nodes:wfNodes.map(function(n){return{id:n.id,type:n.type,label:n.label,x:n.x,y:n.y,config:n.config};}),
+      edges:edges,updated_at:new Date().toISOString()};
+    authFetch('/workflows/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({workflow:wf})}).then(function(d){
+      if(d&&d.ok){wfCurId=d.id;wfUnsaved=false;document.getElementById('wf-unsaved').style.display='none';
+        document.getElementById('wf-status').textContent='✓ Saved';wfLog('ok','Saved: '+d.id);wfLoadList();}
+      else wfLog('err','Save failed: '+(d&&d.error||''));
+    });
+  }
+  function wfLoad(id){
+    if(!id)return;
+    authFetch('/workflows/'+id).then(function(d){
+      if(!d){wfLog('err','Not found.');return;}
+      wfCurId=d.id||id;
+      wfNodes=(d.nodes||[]).map(function(n){return{id:n.id,type:n.type,label:n.label||NL[n.type]||n.type,x:n.x||100+Math.random()*300,y:n.y||100+Math.random()*200,config:Object.assign({},ND[n.type]||{},n.config||{})};});
+      wfEdges=(d.edges||[]).map(function(e,i){return{id:e.id||('e'+i),source:e.source,target:e.target,sourceHandle:e.sourceHandle||'out',targetHandle:e.targetHandle||null};});
+      wfNodes.forEach(function(n){var num=parseInt(n.id.replace(/\D/g,''));if(num>=wfIdCtr)wfIdCtr=num+1;});
+      wfSel=null;wfUnsaved=false;wfPanX=0;wfPanY=0;wfZoom=1;wfRender();
+      wfLog('ok','Loaded: '+(d.name||id)+' ('+wfNodes.length+' nodes)');
+      document.getElementById('wf-unsaved').style.display='none';document.getElementById('wf-status').textContent=d.name||id;
+    });
+  }
+  function wfDelete(){
+    var id=document.getElementById('wf-selector').value;
+    if(!id){wfLog('warn','Select a workflow.');return;}
+    if(!confirm('Delete "'+id+'"?'))return;
+    authFetch('/workflows/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id})}).then(function(d){
+      if(d&&d.ok){wfLog('ok','Deleted: '+id);wfLoadList();if(wfCurId===id)wfNew();}else wfLog('err','Delete failed.');
+    });
+  }
+  function wfValidate(){
+    if(!wfNodes.length){wfLog('warn','No nodes.');return;}
+    var wf={nodes:wfNodes.map(function(n){return{id:n.id,type:n.type,config:n.config};}),edges:wfEdges};
+    authFetch('/workflows/validate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({workflow:wf})}).then(function(d){
+      if(!d){wfLog('err','Validation failed.');return;}
+      if(d.valid)wfLog('ok','✅ Valid! ('+wfNodes.length+' nodes, '+wfEdges.length+' edges)');
+      else{(d.errors||[]).forEach(function(e){wfLog('err','  • '+e);});}
+    });
+  }
+  function wfRun(){
+    if(!wfNodes.length){wfLog('warn','No workflow.');return;}
+    if(!wfCurId){wfLog('warn','Save first.');return;}
+    wfLog('info','Starting…');document.getElementById('wf-run-status').textContent='▶ Running…';
+    authFetch('/workflows/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:wfCurId,async:true})}).then(function(d){
+      if(!d||!d.ok){wfLog('err','Failed: '+(d&&d.error||''));document.getElementById('wf-run-status').textContent='❌ Failed';return;}
+      wfLog('ok','Started: '+d.runId);wfPoll(d.runId);
+    });
+  }
+  function wfPoll(runId){
+    var polls=0,iv=setInterval(function(){
+      polls++;authFetch('/workflow-runs?limit=10').then(function(d){
+        if(!d||!d.runs)return;
+        var found=d.runs.find(function(r){return r.run_id===runId;});
+        if(found&&found.status!=='running'){
+          clearInterval(iv);authFetch('/workflow-runs/'+runId).then(function(det){
+            if(det){var s=det.status||'unknown';wfLog('ok','Complete: '+s);
+              document.getElementById('wf-run-status').textContent=s==='completed'?'✅ Done':s==='failed'?'❌ Failed':'⚠️ '+s;
+              (det.log||[]).forEach(function(e){wfLog(e.level||'info',e.msg);});
+            }
+          });
+        }else if(polls>=60){clearInterval(iv);wfLog('warn','Poll timeout.');document.getElementById('wf-run-status').textContent='⏱ Timeout';}
+      });
+    },5000);
+  }
+  function wfLoadRuns(){
+    authFetch('/workflow-runs?limit=20').then(function(d){
+      if(!d||!d.runs||!d.runs.length){wfLog('info','No runs yet.');return;}
+      wfLog('info','── Run History ──');d.runs.forEach(function(r){
+        var ic=r.status==='completed'?'✅':r.status==='failed'?'❌':'⚡';
+        wfLog('info',ic+' '+r.workflow_name+' — '+r.status+' ('+r.started_at.slice(5,16).replace('T',' ')+')');
+      });
+    });
+  }
+  function wfSum(n){var c=n.config;if(n.type==='agent')return c.prompt?(c.prompt.slice(0,40)+(c.prompt.length>40?'…':'')):c.agent;if(n.type==='action')return c.action_type+(c.url?' '+c.url.slice(0,30):'');if(n.type==='trigger')return c.trigger_type;if(n.type==='condition')return c.field+' '+c.operator+' '+c.value;if(n.type==='delay')return c.seconds+'s';if(n.type==='output')return c.save_to||'end';return n.type;}
+  function wfRender(){
+    var wrapper=document.getElementById('wf-canvas-wrapper');
+    var edgesLayer=document.getElementById('wf-edges-layer');
+    if(!wrapper||!edgesLayer)return;
+    var ts='translate('+wfPanX+','+wfPanY+') scale('+wfZoom+')';
+    edgesLayer.setAttribute('transform',ts);
+    var eh='';
+    wfEdges.forEach(function(e){
+      var s=wfNodes.find(function(n){return n.id===e.source;});
+      var t=wfNodes.find(function(n){return n.id===e.target;});
+      if(!s||!t)return;
+      var x1=s.x+160,y1=s.y+35,x2=t.x,y2=t.y+35,mx=(x1+x2)/2;
+      eh+='<path d="M'+x1+','+y1+' C'+mx+','+y1+' '+mx+','+y2+' '+x2+','+y2+'" fill="none" stroke="#555570" stroke-width="2" marker-end="url(#arrowhead)"/>';
+    });
+    edgesLayer.innerHTML=eh;
+    var nc=document.getElementById('wf-nodes-html');
+    if(!nc){nc=document.createElement('div');nc.id='wf-nodes-html';nc.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible;';wrapper.appendChild(nc);}
+    nc.style.transform='translate('+wfPanX+'px,'+wfPanY+'px) scale('+wfZoom+')';nc.style.transformOrigin='0 0';
+    var html='';
+    wfNodes.forEach(function(n){
+      var c=NC[n.type]||'#8888a0';var sel=wfSel===n.id;
+      html+='<div class="wf-node'+(sel?' selected':'')+'" id="wf-node-'+n.id+'" style="left:'+(n.x-80)+'px;top:'+(n.y-35)+'px;border-color:'+(sel?'var(--accent)':c)+';pointer-events:auto">'+
+        '<div class="wf-node-header" style="background:'+c+'22;color:'+c+'">'+NL[n.type]+'</div>'+
+        '<div class="wf-node-body">'+wfSum(n)+'</div></div>';
+    });
+    nc.innerHTML=html;
+    wfNodes.forEach(function(n){
+      var el=document.getElementById('wf-node-'+n.id);if(!el)return;
+      el.addEventListener('mousedown',function(ev){if(ev.button!==0)return;ev.stopPropagation();ev.preventDefault();
+        wfDragNode=n.id;var r=wrapper.getBoundingClientRect();wfDragOX=(ev.clientX-r.left-wfPanX)/wfZoom-n.x;wfDragOY=(ev.clientY-r.top-wfPanY)/wfZoom-n.y;
+      });
+      el.addEventListener('click',function(ev){ev.stopPropagation();wfSel=n.id;wfRender();wfShowCfg(n.id);});
+    });
+    var z=document.getElementById('wf-zoom');if(z)z.textContent=Math.round(wfZoom*100)+'%';
+  }
+  function wfShowCfg(id){
+    var n=wfNodes.find(function(x){return x.id===id;});if(!n)return;
+    var p=document.getElementById('wf-config-content');
+    var c=NC[n.type]||'#8888a0';
+    var h='<div style="font-size:14px;font-weight:700;color:'+c+';margin-bottom:4px">'+NL[n.type]+'</div>';
+    h+='<div style="font-size:10px;color:var(--text-dim);margin-bottom:12px">ID: '+n.id+'</div>';
+    h+='<div class="wf-config-field"><label>Label</label><input type="text" value="'+(n.label||'')+'" onchange="wfUpd(\''+id+'\',\'label\',this.value)"></div>';
+    var df=ND[n.type]||{};
+    var fields=Object.keys(df);
+    for(var i=0;i<fields.length;i++){
+      var k=fields[i];var v=n.config[k]!==undefined?n.config[k]:df[k];
+      h+='<div class="wf-config-field"><label>'+k.replace(/_/g,' ')+'</label>';
+      if(k==='prompt'||k==='body'||k==='expression'){h+='<textarea onchange="wfUpdCfg(\''+id+'\',\''+k+'\',this.value)">'+v+'</textarea>';}
+      else if(k==='agent'){h+='<select onchange="wfUpdCfg(\''+id+'\',\''+k+'\',this.value)"><option value="hermes"'+(v==='hermes'?' selected':'')+'>Hermes</option><option value="researcher"'+(v==='researcher'?' selected':'')+'>Researcher</option><option value="writer"'+(v==='writer'?' selected':'')+'>Writer</option><option value="developer"'+(v==='developer'?' selected':'')+'>Developer</option><option value="antigravity"'+(v==='antigravity'?' selected':'')+'>Antigravity</option></select>';}
+      else if(k==='action_type'){h+='<select onchange="wfUpdCfg(\''+id+'\',\''+k+'\',this.value)"><option value="http"'+(v==='http'?' selected':'')+'>HTTP</option><option value="shell"'+(v==='shell'?' selected':'')+'>Shell</option><option value="save-file"'+(v==='save-file'?' selected':'')+'>Save File</option><option value="load-file"'+(v==='load-file'?' selected':'')+'>Load File</option><option value="notify"'+(v==='notify'?' selected':'')+'>Notify</option><option value="deep-research"'+(v==='deep-research'?' selected':'')+'>Deep Research</option></select>';}
+      else if(k==='method'){h+='<select onchange="wfUpdCfg(\''+id+'\',\''+k+'\',this.value)"><option value="GET"'+(v==='GET'?' selected':'')+'>GET</option><option value="POST"'+(v==='POST'?' selected':'')+'>POST</option><option value="PUT"'+(v==='PUT'?' selected':'')+'>PUT</option><option value="DELETE"'+(v==='DELETE'?' selected':'')+'>DELETE</option></select>';}
+      else if(k==='operator'){h+='<select onchange="wfUpdCfg(\''+id+'\',\''+k+'\',this.value)"><option value="=="'+(v==='=='?' selected':'')+'>==</option><option value="!="'+(v==='!='?' selected':'')+'>!=</option><option value=">"'+(v==='>'?' selected':'')+'>></option><option value="<"'+(v==='<'?' selected':'')+'><</option><option value="contains"'+(v==='contains'?' selected':'')+'>contains</option><option value="exists"'+(v==='exists'?' selected':'')+'>exists</option></select>';}
+      else if(k==='trigger_type'){h+='<select onchange="wfUpdCfg(\''+id+'\',\''+k+'\',this.value)"><option value="manual"'+(v==='manual'?' selected':'')+'>Manual</option><option value="schedule"'+(v==='schedule'?' selected':'')+'>Schedule</option></select>';}
+      else if(typeof df[k]==='number'){h+='<input type="number" value="'+v+'" onchange="wfUpdCfg(\''+id+'\',\''+k+'\',this.value)">';}
+      else{h+='<input type="text" value="'+String(v).replace(/"/g,'&quot;')+'" onchange="wfUpdCfg(\''+id+'\',\''+k+'\',this.value)">';}
+      h+='</div>';
+    }
+    h+='<div style="margin-top:12px"><button class="btn small danger" onclick="wfRemoveNode(\''+id+'\')">🗑 Remove</button></div>';
+    p.innerHTML=h;
+  }
+  function wfUpd(id,k,v){var n=wfNodes.find(function(x){return x.id===id;});if(n){n[k]=v;wfUnsaved=true;document.getElementById('wf-unsaved').style.display='inline';wfRender();}}
+  function wfUpdCfg(id,k,v){var n=wfNodes.find(function(x){return x.id===id;});if(n){n.config[k]=v;wfUnsaved=true;document.getElementById('wf-unsaved').style.display='inline';wfRender();}}
+  function wfRemoveNode(id){wfNodes=wfNodes.filter(function(n){return n.id!==id;});wfEdges=wfEdges.filter(function(e){return e.source!==id&&e.target!==id;});if(wfSel===id){wfSel=null;var cc=document.getElementById('wf-config-content');if(cc)cc.innerHTML='Click a node.';}wfUnsaved=true;document.getElementById('wf-unsaved').style.display='inline';wfRender();wfLog('info','Removed '+id);}
+  function wfCanvasDown(e){if(e.button===0&&(e.target.id==='wf-canvas-wrapper'||e.target.id==='wf-canvas'||e.target.id==='wf-nodes-html'||e.target.id==='wf-edges-layer')){wfPanning=true;wfPanSX=e.clientX-wfPanX;wfPanSY=e.clientY-wfPanY;var c=document.getElementById('wf-canvas');if(c)c.style.cursor='grabbing';}}
+  function wfCanvasMove(e){if(wfDragNode){var n=wfNodes.find(function(x){return x.id===wfDragNode;});if(n){var r=document.getElementById('wf-canvas-wrapper').getBoundingClientRect();n.x=(e.clientX-r.left-wfPanX)/wfZoom-wfDragOX;n.y=(e.clientY-r.top-wfPanY)/wfZoom-wfDragOY;wfUnsaved=true;wfRender();}}else if(wfPanning){wfPanX=e.clientX-wfPanSX;wfPanY=e.clientY-wfPanSY;requestAnimationFrame(wfRender);}}
+  function wfCanvasUp(){wfPanning=false;wfDragNode=null;var c=document.getElementById('wf-canvas');if(c)c.style.cursor='grab';}
+  function wfCanvasWheel(e){e.preventDefault();var d=e.deltaY>0?0.9:1.1;wfZoom=Math.max(0.3,Math.min(3,wfZoom*d));wfRender();}
+  function wfCanvasDrop(e){e.preventDefault();var type=e.dataTransfer.getData('text/plain');if(!type)return;var r=document.getElementById('wf-canvas-wrapper').getBoundingClientRect();var x=(e.clientX-r.left-wfPanX)/wfZoom,y=(e.clientY-r.top-wfPanY)/wfZoom;var id='n'+wfIdCtr++;wfNodes.push({id:id,type:type,label:NL[type]||type,x:x-80,y:y-35,config:Object.assign({},ND[type])});wfUnsaved=true;document.getElementById('wf-unsaved').style.display='inline';wfRender();wfLog('info','Added '+type+': '+id);}
+  function wfAutoLayout(){if(!wfNodes.length)return;var cols={};wfNodes.forEach(function(n){var c=n.x<200?0:n.x<400?1:n.x<600?2:3;if(!cols[c])cols[c]=[];cols[c].push(n);});var x=50;Object.keys(cols).sort().forEach(function(k){var ns=cols[k];var y=50;ns.forEach(function(n){n.x=x;n.y=y;y+=90;});x+=200;});wfRender();wfLog('info','Auto-layout.');}
+  function wfClear(){if(!confirm('Clear all?'))return;wfNodes=[];wfEdges=[];wfSel=null;wfIdCtr=1;wfRender();document.getElementById('wf-config-content').innerHTML='Click a node.';wfLog('info','Cleared.');}
+  function wfZoomFit(){wfZoom=1;wfPanX=0;wfPanY=0;wfRender();}
+  function wfLog(lvl,msg){var el=document.getElementById('wf-log');if(!el)return;var t=new Date().toLocaleTimeString();var c=lvl==='ok'?'ok':lvl==='err'?'err':lvl==='warn'?'warn':'info';el.innerHTML+='<div class="wf-log-entry '+c+'">['+t+'] '+msg+'</div>';el.scrollTop=el.scrollHeight;}
+
+  window.wfInit=wfInit;window.wfNew=wfNew;window.wfSave=wfSave;window.wfLoad=wfLoad;window.wfDelete=wfDelete;window.wfValidate=wfValidate;window.wfRun=wfRun;window.wfLoadList=wfLoadList;window.wfLoadRuns=wfLoadRuns;window.wfAutoLayout=wfAutoLayout;window.wfClear=wfClear;window.wfZoomFit=wfZoomFit;
+  window.wfDragStart=function(e,t){e.dataTransfer.setData('text/plain',t);e.dataTransfer.effectAllowed='copy';};
+  window.wfCanvasDrop=wfCanvasDrop;window.wfCanvasDown=wfCanvasDown;window.wfCanvasMove=wfCanvasMove;window.wfCanvasUp=wfCanvasUp;window.wfCanvasWheel=wfCanvasWheel;
+  window.wfUpd=wfUpd;window.wfUpdCfg=wfUpdCfg;window.wfRemoveNode=wfRemoveNode;
+
+  // Override go() to init workflows view
+  var origGo=window.go;
+  window.go=function(view,el){
+    origGo(view,el);
+    if(view==='workflows'){setTimeout(function(){wfInit();if(!wfNodes.length)wfNew();},50);}
+  };
+})();
+
+
+// ═══ ORCHESTRATE ═══
+async function orchestrateRun() {
+  const task = document.getElementById('orch-task-input').value.trim();
+  if (!task) { alert('Enter a task to orchestrate.'); return; }
+  const agentsSel = document.getElementById('orch-agents').value;
+  const mode = document.getElementById('orch-mode').value;
+  const detail = document.getElementById('orch-detail');
+  const statusEl = document.getElementById('orch-status');
+
+  statusEl.textContent = '⏳ Starting…';
+  detail.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:16px"><div style="font-size:40px">⚡</div><div style="font-size:14px;font-weight:600">Starting orchestration…</div><div style="font-size:12px;color:var(--text-dim);text-align:center;max-width:300px">Hermes is decomposing the task and spawning specialist sub-agents.</div><div style="width:200px;height:4px;background:var(--surface);border-radius:4px;overflow:hidden"><div style="height:100%;width:30%;background:var(--accent);border-radius:4px;animation:orchPulse 1.5s ease-in-out infinite"></div></div></div><style>@keyframes orchPulse{0%{width:20%;opacity:.5}50%{width:60%;opacity:1}100%{width:20%;opacity:.5}}</style>';
+  detail.style.display = 'flex';
+  try {
+    // Submit orchestration (async mode — returns immediately)
+    const d = await authFetch('/orchestrate/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        task,
+        agents: agentsSel || null,
+        parallel: mode === 'parallel',
+        async: true,
+      }),
+    });
+
+    if (!d || !d.ok) {
+      var errMsg = d && d.error ? String(d.error).replace(/</g,'&lt;').replace(/>/g,'&gt;') : 'No response';
+      detail.innerHTML = '<div class="empty">❌ Failed to start: ' + errMsg + '</div>';
+      detail.style.display = 'flex';
+      statusEl.textContent = '❌ Failed';
+    }
+
+    const runId = d.run_id;
+    statusEl.textContent = '⚡ Running (ID: ' + runId.slice(0, 18) + '…)';
+    detail.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:16px"><div style="font-size:40px">🎼</div><div style="font-size:14px;font-weight:600">Orchestration running…</div><div style="font-size:12px;color:var(--text-dim);text-align:center;max-width:300px">Sub-agents are working in parallel. Polling for results…</div><div style="font-size:11px;color:var(--accent)">ID: ' + runId + '</div><div style="width:200px;height:4px;background:var(--surface);border-radius:4px;overflow:hidden"><div style="height:100%;width:30%;background:var(--accent);border-radius:4px;animation:orchPulse 1.5s ease-in-out infinite"></div></div></div>';
+    detail.style.display = 'flex';
+
+    let finalRun = null;
+    for (let i = 0; i < 75; i++) {
+      await new Promise(r => setTimeout(r, 8000));
+      const runs = await authFetch('/orchestrate/runs?limit=20');
+      if (!runs || !runs.runs) continue;
+      const found = runs.runs.find(r => r.run_id === runId);
+      if (found && found.status !== 'running') {
+        // Completed — load full detail
+        finalRun = await authFetch('/orchestrate/run/' + runId);
+        break;
+      }
+      // Still running — update status
+      if (found) {
+        statusEl.textContent = '⚡ Running — checked ' + (i + 1) + '/75…';
+      }
+    }
+
+    if (!finalRun) {
+      // Timeout — still show what we have
+      finalRun = await authFetch('/orchestrate/run/' + runId);
+      statusEl.textContent = '⏱ Timed out waiting — showing latest state';
+    } else {
+      const s = (finalRun && finalRun.status) || 'unknown';
+      statusEl.textContent = s === 'completed' ? '✅ Done' : s === 'partial' ? '⚠️ Partial' : s === 'failed' ? '❌ Failed' : 'ℹ️ ' + s;
+    }
+
+    detail.innerHTML = orchestrateRenderRun(finalRun);
+    detail.style.display = 'flex';
+    orchestrateLoadHistory();
+  } catch (e) {
+    detail.innerHTML = '<div class="empty">❌ Error: ' + e.message + '</div>';
+    detail.style.display = 'flex';
+    statusEl.textContent = '❌ Failed';
+  }
+}
+
+async function orchestrateLoadHistory() {
+  const d = await authFetch('/orchestrate/runs?limit=20');
+  const el = document.getElementById('orch-history');
+  if (!d || !d.runs || !d.runs.length) {
+    el.innerHTML = '<div class="empty" style="padding:8px;font-size:11px">No orchestration runs yet.</div>';
+    return;
+  }
+  const colors = { completed: 'var(--green)', partial: 'var(--yellow)', failed: 'var(--red)', running: 'var(--accent)' };
+  el.innerHTML = d.runs.map(function(r) {
+    const c = colors[r.status] || '#8888a0';
+    const time = r.started_at ? r.started_at.slice(5, 16).replace('T', ' ') : '?';
+    return '<div style="padding:8px;background:var(--bg);border-radius:6px;cursor:pointer;border-left:3px solid ' + c + '" onclick="orchestrateViewRun(\'' + r.run_id + '\')">' +
+      '<div style="display:flex;align-items:center;gap:6px">' +
+        '<span style="font-size:10px;font-weight:600;color:' + c + '">' + r.status + '</span>' +
+        '<span style="font-size:10px;color:var(--text-dim);margin-left:auto">' + time + '</span>' +
+      '</div>' +
+      '<div style="font-size:11px;color:var(--text);margin-top:4px;font-weight:500">' + r.task.slice(0, 60) + (r.task.length > 60 ? '…' : '') + '</div>' +
+      '<div style="font-size:10px;color:var(--text-dim);margin-top:2px">' + r.subtasks_completed + '/' + r.subtasks_total + ' agents · ' + (r.duration_ms / 1000).toFixed(1) + 's</div>' +
+    '</div>';
+  }).join('');
+}
+
+async function orchestrateViewRun(runId) {
+  const d = await authFetch('/orchestrate/run/' + runId);
+  if (!d || d.error) { alert('Run not found.'); return; }
+        document.getElementById('orch-detail').innerHTML = orchestrateRenderRun(d);
+        document.getElementById('orch-detail').style.display = 'flex';
+}
+
+function orchestrateRenderRun(d) {
+  if (!d) return '<div class="empty">No run data</div>';
+  const colors = { hermes: '#7c5bf5', researcher: '#5b9bf5', writer: '#4ade80', developer: '#fbbf24', antigravity: '#f472b6' };
+  const isRunning = d.status === 'running';
+  let agentsHtml = '';
+  if (d.results && d.results.length) {
+    agentsHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-top:16px">';
+    for (const r of d.results) {
+      const c = colors[r.agent] || '#7c5bf5';
+      const outputHtml = r.output
+        ? '<pre style="white-space:pre-wrap;font-size:11px;line-height:1.5;color:var(--text);background:var(--bg);padding:12px;border-radius:8px;max-height:300px;overflow-y:auto;margin-top:8px">' + r.output.substring(0, 2000) + (r.output.length > 2000 ? '\n\n…(truncated)' : '') + '</pre>'
+        : '<div class="empty" style="padding:8px;font-size:11px">' + (r.error || 'No output yet') + '</div>';
+      const icon = r.status === 'completed' ? '✅' : r.status === 'timeout' ? '⏱' : r.status === 'running' ? '⚡' : '❌';
+      agentsHtml += '<div style="background:var(--bg);border:1px solid ' + c + '22;border-radius:8px;padding:14px">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
+          '<span style="font-size:16px">' + icon + '</span>' +
+          '<span style="font-weight:600;color:' + c + '">' + r.agent_name + '</span>' +
+          '<span style="font-size:10px;color:var(--text-dim);margin-left:auto">' + (r.duration_ms / 1000).toFixed(1) + 's</span>' +
+        '</div>' +
+        '<div style="font-size:11px;color:var(--text-dim);margin-bottom:6px">' + r.status + '</div>' +
+        outputHtml +
+      '</div>';
+    }
+    agentsHtml += '</div>';
+  } else if (isRunning) {
+    agentsHtml = '<div style="text-align:center;padding:32px;color:var(--text-dim);font-size:13px">⏳ Waiting for sub-agents to report results…<br><span style="font-size:11px">Refresh this run in a moment to see outputs.</span></div>';
+  } else {
+    agentsHtml = '<div class="empty">No sub-agent results</div>';
+  }
+  const statusBg = d.status === 'completed' ? 'rgba(74,222,128,0.15)' : d.status === 'running' ? 'rgba(124,91,245,0.15)' : 'rgba(251,191,36,0.15)';
+  const statusColor = d.status === 'completed' ? 'var(--green)' : d.status === 'running' ? 'var(--accent)' : 'var(--yellow)';
+  return '<div style="display:flex;flex-direction:column;gap:16px;height:100%;overflow-y:auto">' +
+    '<div style="display:flex;align-items:center;gap:12px">' +
+      '<div style="font-size:24px">' + (isRunning ? '🎼' : '📋') + '</div>' +
+      '<div><div style="font-size:15px;font-weight:700">Orchestration ' + (d.run_id ? d.run_id.slice(0, 20) + '…' : '?') + '</div>' +
+      '<div style="font-size:11px;color:var(--text-dim)">' + d.subtasks_completed + '/' + d.subtasks_total + ' completed · ' + (d.duration_ms / 1000).toFixed(1) + 's · ' + d.status + '</div></div>' +
+      '<span style="margin-left:auto;font-size:11px;padding:3px 10px;border-radius:12px;background:' + statusBg + ';color:' + statusColor + '">' + d.status + '</span>' +
+    '</div>' +
+    '<div style="background:var(--bg);padding:12px;border-radius:8px;font-size:12px;color:var(--text-dim);border-left:3px solid var(--accent)">' + d.task + '</div>' +
+    agentsHtml +
+  '</div>';
+}
+
+
+// ═══ AGENT CHANNELS (Multi-Agent) ═══
+async function channelsLoadAgents() {
+  const d = await authFetch('/agents');
+  if (!d || !d.agents) return;
+  const el = document.getElementById('channels-agent-list');
+  const registryEl = document.getElementById('agents-list');
+  // Also update sidebar badges
+  const active = d.agents.filter(a => a.status === 'active').length;
+  const navBadge = document.getElementById('nav-channels-count');
+  if (navBadge) navBadge.textContent = active;
+  const agentsBadge = document.getElementById('nav-agents-count');
+  if (agentsBadge) agentsBadge.textContent = d.agents.length;
+
+  const agentColors = { hermes: '#7c5bf5', researcher: '#5b9bf5', writer: '#4ade80', developer: '#fbbf24', antigravity: '#f472b6', codex: '#8888a0' };
+
+  const renderCard = (a) => {
+    const color = agentColors[a.key] || '#7c5bf5';
+    const statusClass = a.status === 'active' ? 'on' : 'off';
+    const memSize = a.memory_size ? (a.memory_size < 1024 ? a.memory_size + 'B' : (a.memory_size / 1024).toFixed(1) + 'KB') : '—';
+    const memFiles = a.file_count || 0;
+    return `<div class="agent-card" onclick="channelsSelectAgent('${a.key}')" id="ch-agent-${a.key}" style="border:1px solid ${color}22;background:${color}08">
+      <div class="agent-icon" style="background:${color}22;color:${color}">${a.emoji}</div>
+      <div class="agent-info">
+        <div class="agent-name">${a.name}</div>
+        <div class="agent-desc">${a.role} · ${memFiles} files · ${memSize}</div>
+      </div>
+      <span class="agent-dot ${statusClass}" style="background:${a.status === 'active' ? 'var(--green)' : 'var(--red)'}"></span>
+    </div>`;
+  };
+
+  el.innerHTML = d.agents.map(renderCard).join('');
+
+  // Also update the old agents registry view
+  if (registryEl) {
+    registryEl.innerHTML = d.agents.map(renderCard).join('');
+  }
+}
+
+async function channelsSelectAgent(key) {
+  // Highlight selected
+  document.querySelectorAll('#channels-agent-list .agent-card').forEach(c => {
+    c.style.border = c.id === 'ch-agent-' + key ? '2px solid var(--accent)' : '1px solid rgba(124,91,245,0.13)';
+  });
+
+  // Load agent detail
+  const [detail, activityRes, memRes] = await Promise.all([
+    authFetch('/agents/' + key),
+    authFetch('/agents/' + key + '?sub=activity&limit=10'),
+    authFetch('/agents/' + key + '?sub=memory'),
+  ]);
+
+  if (!detail || !detail.agent) return;
+  const a = detail.agent;
+  const color = { hermes: '#7c5bf5', researcher: '#5b9bf5', writer: '#4ade80', developer: '#fbbf24', antigravity: '#f472b6', codex: '#8888a0' }[a.key] || '#7c5bf5';
+
+  const activityHtml = (activityRes?.activity || []).map(e =>
+    `<div style="padding:6px 8px;border-radius:6px;background:var(--bg);font-size:11px;border-left:2px solid ${color}">
+      <div style="display:flex;justify-content:space-between;gap:8px">
+        <span style="color:var(--text-dim);font-size:10px">${e.timestamp ? e.timestamp.slice(5, 16).replace('T', ' ') : '—'}</span>
+        <span style="font-size:10px;color:${e.status === 'completed' ? 'var(--green)' : e.status === 'failed' ? 'var(--red)' : 'var(--yellow)'}">${e.status}</span>
+      </div>
+      <div style="margin-top:3px;color:var(--text);font-weight:500">${e.action}</div>
+      ${e.duration_ms ? `<div style="font-size:10px;color:var(--text-dim);margin-top:2px">⏱ ${(e.duration_ms / 1000).toFixed(1)}s · ${e.model || '—'}</div>` : ''}
+    </div>`
+  ).join('') || '<div class="empty" style="padding:8px;font-size:11px">No activity yet for this agent.</div>';
+
+  const memHtml = memRes?.memory
+    ? `<pre style="white-space:pre-wrap;font-size:12px;line-height:1.6;color:var(--text);background:var(--bg);padding:12px;border-radius:8px;overflow-x:auto">${memRes.memory.slice(600)}${memRes.memory.length > 600 ? '…' : ''}</pre>`
+    : '<div class="empty" style="padding:8px;font-size:11px">No memory file for this agent yet.</div>';
+
+  const el = document.getElementById('channels-detail');
+  el.innerHTML = `
+    <div class="panel">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        <div style="width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;background:${color}22;color:${color}">${a.emoji}</div>
+        <div>
+          <div style="font-size:15px;font-weight:700">${a.name}</div>
+          <div style="font-size:12px;color:var(--text-dim)">${a.role} · ${a.model}</div>
+        </div>
+        <span class="agent-dot ${a.status === 'active' ? 'on' : 'off'}" style="margin-left:auto"></span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;margin-bottom:12px">
+        <div style="background:var(--bg);padding:8px;border-radius:6px"><span style="color:var(--text-dim)">Status</span><br><strong>${a.status}</strong></div>
+        <div style="background:var(--bg);padding:8px;border-radius:6px"><span style="color:var(--text-dim)">Memory</span><br><strong>${a.file_count || 0} files · ${(a.memory_size < 1024 ? a.memory_size + 'B' : (a.memory_size / 1024).toFixed(1) + 'KB')}</strong></div>
+      </div>
+      ${a.triggers?.length ? `<div style="margin-bottom:12px"><div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">TRIGGERS</div><div style="display:flex;gap:4px;flex-wrap:wrap">${a.triggers.map(t => `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:${color}22;color:${color}">${t}</span>`).join('')}</div></div>` : ''}
+    </div>
+    <div class="panel">
+      <h4 style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text-dim)">RECENT ACTIVITY</h4>
+      <div style="display:flex;flex-direction:column;gap:6px">${activityHtml}</div>
+    </div>
+    <div class="panel">
+      <h4 style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text-dim)">MEMORY PREVIEW</h4>
+      ${memHtml}
+    </div>`;
+}
+
+async function channelsLoadActivity() {
+  const d = await authFetch('/activity?limit=30');
+  const el = document.getElementById('channels-activity-feed');
+  if (!d || !d.activity || !d.activity.length) {
+    el.innerHTML = '<div class="empty" style="padding:12px;font-size:11px">No activity yet. Send a query through Hermes Bridge to see it here.</div>';
+    return;
+  }
+  const colors = { hermes: '#7c5bf5', researcher: '#5b9bf5', writer: '#4ade80', developer: '#fbbf24', antigravity: '#f472b6', codex: '#8888a0' };
+  el.innerHTML = d.activity.map(e => {
+    const c = colors[e.agent] || '#7c5bf5';
+    return `<div style="padding:5px 8px;border-radius:6px;background:var(--bg);border-left:3px solid ${c};font-size:11px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+        <span style="font-weight:600;color:${c}">${e.agent}</span>
+        <span style="font-size:10px;color:var(--text-dim);margin-left:auto">${e.timestamp ? e.timestamp.slice(11, 16) : '—'}</span>
+        <span style="font-size:9px;color:${e.status === 'completed' ? 'var(--green)' : e.status === 'failed' ? 'var(--red)' : 'var(--yellow)'}">${e.status}</span>
+      </div>
+      <div style="color:var(--text);font-weight:500">${e.action}</div>
+      ${e.duration_ms ? `<div style="font-size:10px;color:var(--text-dim)">⏱ ${(e.duration_ms / 1000).toFixed(1)}s</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function channelsRouteTask() {
+  const input = document.getElementById('channels-route-input');
+  const resultEl = document.getElementById('channels-route-result');
+  const task = input.value.trim();
+  if (!task) return;
+  resultEl.style.display = 'block';
+  resultEl.textContent = 'Routing…';
+  const d = await authFetch('/agents/route', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task }) });
+  if (!d || !d.ok) {
+    resultEl.textContent = 'Routing failed.';
+    return;
+  }
+  const colors = { hermes: '#7c5bf5', researcher: '#5b9bf5', writer: '#4ade80', developer: '#fbbf24' };
+  const c = colors[d.routed_to] || '#7c5bf5';
+  resultEl.innerHTML = `<div style="padding:8px;background:${c}15;border-radius:8px;border:1px solid ${c}33">
+    <div style="font-weight:600;color:${c}">→ ${d.agent_name}</div>
+    <div style="font-size:10px;color:var(--text-dim);margin-top:4px">Confidence: ${d.confidence} · Triggers: ${(d.matched_triggers || []).join(', ') || 'default'}</div>
+  </div>`;
+}
+
+function channelsLoadAgentsForRegistry() {
+  channelsLoadAgents();
+}
+
+// ── AGENT REGISTRY (Feature 3) ──
+const BUILTIN_AGENTS = new Set(['hermes','researcher','writer','developer','antigravity','codex','pm']);
+
+async function loadAgentRegistry() {
+  const el = document.getElementById('agent-registry-list');
+  if (!el) return;
+  const d = await authFetch('/agents');
+  if (!d || !d.agents) { el.innerHTML = '<div class="empty">Failed to load registry.</div>'; return; }
+  const agents = d.agents;
+  if (!agents.length) { el.innerHTML = '<div class="empty">No agents registered.</div>'; return; }
+  el.innerHTML = `<div style="display:flex;flex-direction:column;gap:8px">${agents.map(a => {
+    const builtin = BUILTIN_AGENTS.has(a.key);
+    const statusClass = a.status === 'active' ? 'on' : 'off';
+    const actions = builtin
+      ? `<span style="font-size:10px;color:var(--text-dim)">built-in</span>`
+      : `<button class="btn small" onclick="editAgent('${a.key}')">Edit</button>
+         <button class="btn small" style="color:var(--red)" onclick="deleteAgent('${a.key}')">Delete</button>`;
+    return `<div class="agent-card" style="cursor:pointer" onclick="showAgent('${a.key}')">
+      <div class="agent-icon">${a.emoji || '🤖'}</div>
+      <div class="agent-info">
+        <div class="agent-name">${a.name} ${builtin ? '' : '<span style="font-size:9px;color:var(--accent)">custom</span>'}</div>
+        <div class="agent-desc">${a.role || ''} · ${a.model || ''}</div>
+      </div>
+      <span class="agent-dot ${statusClass}" style="background:${a.status === 'active' ? 'var(--green)' : 'var(--red)'}"></span>
+      <div style="display:flex;gap:6px;margin-left:10px" onclick="event.stopPropagation()">${actions}</div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function openAgentEditor(key) {
+  document.getElementById('agent-editor-title').textContent = key ? ('Edit Agent: ' + key) : 'Register Agent';
+  document.getElementById('ae-key').value = key || '';
+  document.getElementById('ae-key').disabled = !!key; // key is immutable on edit
+  document.getElementById('ae-error').style.display = 'none';
+  document.getElementById('agent-editor-modal').style.display = 'flex';
+}
+
+function closeAgentEditor() {
+  document.getElementById('agent-editor-modal').style.display = 'none';
+}
+
+async function editAgent(key) {
+  const d = await authFetch('/agents/' + key);
+  if (!d || !d.agent) { alert('Could not load agent: ' + key); return; }
+  const a = d.agent;
+  document.getElementById('ae-name').value = a.name || '';
+  document.getElementById('ae-emoji').value = a.emoji || '';
+  document.getElementById('ae-role').value = a.role || '';
+  document.getElementById('ae-model').value = a.model || '';
+  document.getElementById('ae-memory').value = a.memory_folder || '';
+  document.getElementById('ae-toolsets').value = (a.toolsets || []).join(', ');
+  document.getElementById('ae-skills').value = (a.skills || []).join(', ');
+  document.getElementById('ae-triggers').value = (a.triggers || []).join(', ');
+  document.getElementById('ae-description').value = a.description || '';
+  openAgentEditor(key);
+}
+
+function _splitList(s) {
+  return (s || '').split(',').map(x => x.trim()).filter(Boolean);
+}
+
+async function saveAgentFromEditor() {
+  const err = document.getElementById('ae-error');
+  const key = document.getElementById('ae-key').value.trim().toLowerCase();
+  const name = document.getElementById('ae-name').value.trim();
+  if (!key || !/^[a-z0-9_-]+$/.test(key)) {
+    err.textContent = 'Key must be lowercase letters/numbers/dashes (no spaces).';
+    err.style.display = 'block';
+    return;
+  }
+  if (!name) {
+    err.textContent = 'Name is required.';
+    err.style.display = 'block';
+    return;
+  }
+  const payload = {
+    key, name,
+    emoji: document.getElementById('ae-emoji').value.trim() || '🤖',
+    role: document.getElementById('ae-role').value.trim(),
+    model: document.getElementById('ae-model').value.trim(),
+    memory_folder: document.getElementById('ae-memory').value.trim(),
+    toolsets: _splitList(document.getElementById('ae-toolsets').value),
+    skills: _splitList(document.getElementById('ae-skills').value),
+    triggers: _splitList(document.getElementById('ae-triggers').value),
+    description: document.getElementById('ae-description').value.trim(),
+    status: 'active',
+  };
+  const btn = document.getElementById('ae-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  const res = await authFetch('/agents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  btn.disabled = false; btn.textContent = 'Save Agent';
+  if (!res || !res.ok) {
+    err.textContent = (res && res.error) || 'Save failed.';
+    err.style.display = 'block';
+    return;
+  }
+  closeAgentEditor();
+  loadAgentRegistry();
+  channelsLoadAgents();
+}
+
+async function deleteAgent(key) {
+  if (!confirm('Delete agent "' + key + '"? This cannot be undone.')) return;
+  const res = await authFetch('/agents/' + key, { method: 'DELETE' });
+  if (!res || !res.ok) {
+    alert((res && res.error) || 'Delete failed.');
+    return;
+  }
+  loadAgentRegistry();
+  channelsLoadAgents();
+}
+
+// api() replaced by authFetch() — see auth section above
+
+async function loadStats() {
+  const s = await authFetch('/stats');
+  if(!s) return;
+  document.getElementById('s-agents') && (document.getElementById('s-agents').textContent = Math.max(s.agents,1));
+  document.getElementById('s-daily') && (document.getElementById('s-daily').textContent = s.daily_notes);
+  document.getElementById('nav-daily-count') && (document.getElementById('nav-daily-count').textContent = s.daily_notes);
+  // Only compute goal stats if goals array has been populated
+  if (goals && goals.length) {
+    const active = goals.filter(g=>g.status!=='completed').length;
+    const done = goals.filter(g=>g.status==='completed').length;
+    document.getElementById('s-goals') && (document.getElementById('s-goals').textContent = active);
+    document.getElementById('nav-goals-count') && (document.getElementById('nav-goals-count').textContent = goals.length);
+    document.getElementById('s-goals-sub') && (document.getElementById('s-goals-sub').textContent = done + ' completed');
+  } else {
+    document.getElementById('s-goals') && (document.getElementById('s-goals').textContent = '—');
+    document.getElementById('nav-goals-count') && (document.getElementById('nav-goals-count').textContent = '0');
+    document.getElementById('s-goals-sub') && (document.getElementById('s-goals-sub').textContent = 'Loading…');
+  }
+
+  // Backup status — non-critical, don't break dashboard if it fails
+  try {
+    const b = await authFetch('/backup/status');
+    if(b && b.ok !== false) {
+      document.getElementById('s-commits').textContent = b.total_commits || '—';
+      const lastDate = b.last_date ? b.last_date.slice(0, 10) : 'Never';
+      const pending = b.pending_changes ? ` · ${b.pending_changes} pending` : '';
+      const el = document.getElementById('s-commits-sub');
+      if(el) el.textContent = `Last: ${lastDate}${pending}`;
+    } else {
+      const el = document.getElementById('s-commits-sub');
+      if(el) el.textContent = 'Not configured';
+      document.getElementById('s-commits').textContent = '—';
+    }
+  } catch(e) {
+    const el = document.getElementById('s-commits-sub');
+    if(el) el.textContent = 'Unavailable';
+  }
+}
+
+// ═══ OUTPUTS ═══
+let _outputsCache = null;
+async function loadOutputs() {
+  const el = document.getElementById('outputs-list');
+  const empty = document.getElementById('outputs-empty');
+  el.innerHTML = '<div class="loading">Loading outputs…</div>';
+  empty.style.display = 'none';
+  try {
+    const d = await authFetch('/api/outputs');
+    if (!d) {
+      // authFetch already showed login overlay — show outputs-specific message
+      el.innerHTML = '<div class="empty" style="font-size:12px">Session expired.<br>Please sign in again to view outputs.</div>';
+      empty.style.display = 'none';
+      const navBadge = document.getElementById('nav-outputs-count');
+      if(navBadge) navBadge.textContent = '!';
+      _outputsCache = [];
+      return;
+    }
+    if (!d.outputs || !d.outputs.length) {
+      el.innerHTML = '';
+      empty.style.display = 'block';
+      const navBadge = document.getElementById('nav-outputs-count');
+      if(navBadge) navBadge.textContent = '0';
+      _outputsCache = [];
+      return;
+    }
+    _outputsCache = d.outputs;
+    // Populate type filter
+    const typeSel = document.getElementById('outputs-type-filter');
+    const currentType = typeSel.value;
+    typeSel.innerHTML = '';
+    (d.types || []).forEach(function(t) {
+      const label = t.replace(/_/g,' ').replace(/\b\w/g, function(c){return c.toUpperCase();});
+      const opt = document.createElement('option');
+      opt.value = t; opt.textContent = t === 'all' ? 'All Types' : label;
+      typeSel.appendChild(opt);
+    });
+    typeSel.value = currentType || 'all';
+    // Populate agent filter
+    const agentSel = document.getElementById('outputs-agent-filter');
+    const currentAgent = agentSel.value;
+    agentSel.innerHTML = '<option value="all">All Agents</option>';
+    (d.agents || []).forEach(function(a) {
+      const opt = document.createElement('option');
+      opt.value = a; opt.textContent = a.charAt(0).toUpperCase() + a.slice(1);
+      agentSel.appendChild(opt);
+    });
+    agentSel.value = currentAgent || 'all';
+    // Update nav badge
+    const navBadge = document.getElementById('nav-outputs-count');
+    if(navBadge) navBadge.textContent = d.total || d.outputs.length;
+    outputsRender(d.outputs);
+  } catch(e) {
+    el.innerHTML = '<div class="empty" style="color:var(--red)">Error: ' + e.message + '</div>';
+    _outputsCache = [];
+  }
+}
+
+function outputsFilter() {
+  if (!_outputsCache) return;
+  const search = document.getElementById('outputs-search').value.toLowerCase();
+  const typeF = document.getElementById('outputs-type-filter').value;
+  const agentF = document.getElementById('outputs-agent-filter').value;
+  const sortF = document.getElementById('outputs-sort').value;
+  let list = _outputsCache.slice();
+  if (search) list = list.filter(function(o){ return o.name.toLowerCase().indexOf(search) >= 0; });
+  if (typeF !== 'all') list = list.filter(function(o){ return o.type === typeF; });
+  if (agentF !== 'all') list = list.filter(function(o){ return o.agent === agentF; });
+  if (sortF === 'recent') list.sort(function(a,b){ return b.mtime - a.mtime; });
+  else if (sortF === 'oldest') list.sort(function(a,b){ return a.mtime - b.mtime; });
+  else if (sortF === 'largest') list.sort(function(a,b){ return b.size - a.size; });
+  else if (sortF === 'name') list.sort(function(a,b){ return a.name.localeCompare(b.name); });
+  outputsRender(list);
+}
+
+function outputsRender(list) {
+  const el = document.getElementById('outputs-list');
+  const empty = document.getElementById('outputs-empty');
+  if (!list.length) {
+    el.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  const typeLabels = {task_output:'Task Output', goal_report:'Goal Report', report:'Report', daily_note:'Daily Note', agent_output:'Agent Output'};
+  const sourceLabels = {orchestration:'Orchestration', 'goal-reports':'Goal Reports', reports:'Reports', daily:'Daily Notes', 'research':'Research'};
+  el.innerHTML = list.map(function(o) {
+    const mtime = new Date(o.mtime * 1000).toLocaleString('en-AU', {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+    const sizeStr = o.size > 1024 ? (o.size/1024).toFixed(1) + 'KB' : o.size + 'B';
+    const typeLabel = typeLabels[o.type] || o.type || 'Output';
+    const sourceLabel = sourceLabels[o.source] || o.source || 'System';
+    const agentLabel = o.agent ? (o.agent.charAt(0).toUpperCase() + o.agent.slice(1)) : '—';
+    const ojson = JSON.stringify(o).replace(/'/g, '&#39;');
+    return '<div class="output-card" style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;transition:border-color 0.15s" onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border)\'">' +
+      '<span style="font-size:22px;flex-shrink:0">' + (o.icon || '📄') + '</span>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + o.name + '</div>' +
+        '<div style="display:flex;gap:12px;margin-top:3px;font-size:10px;color:var(--text-dim)">' +
+          '<span style="background:var(--surface2);padding:1px 8px;border-radius:10px">' + typeLabel + '</span>' +
+          '<span>' + agentLabel + '</span>' +
+          '<span>' + sourceLabel + '</span>' +
+          '<span>' + sizeStr + '</span>' +
+          '<span>' + mtime + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:6px;flex-shrink:0">' +
+        '<button class="btn primary" style="font-size:11px;padding:5px 12px" onclick=\'outputsOpen(' + ojson + ')\'>📄 Open</button>' +
+        '<button class="btn" style="font-size:11px;padding:5px 12px" onclick="outputsCopyPath(\'' + o.path.replace(/'/g,"\\'") + '\')" title="Copy file path">📋</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function outputsCopyPath(path) {
+  navigator.clipboard.writeText(path).then(function() {
+    // Brief toast
+    var t = document.createElement('div');
+    t.textContent = '✓ Path copied';
+    t.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--green);color:#000;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:600;z-index:9999;transition:opacity 0.3s';
+    document.body.appendChild(t);
+    setTimeout(function(){ t.style.opacity = '0'; setTimeout(function(){ t.remove(); }, 300); }, 1500);
+  });
+}
+
+// ── Outputs: in-app viewer (Open button) ──
+async function outputsOpen(o) {
+  const modal = document.getElementById('output-viewer');
+  const frame = document.getElementById('output-viewer-frame');
+  const titleEl = document.getElementById('output-viewer-title');
+  const metaEl = document.getElementById('output-viewer-meta');
+  if (!modal || !frame || !titleEl) return;
+  const token = authToken || localStorage.getItem('moirai_token');
+  titleEl.textContent = o.name + (o.ext ? '.' + o.ext : '');
+  metaEl.textContent = (o.agent ? (o.agent.charAt(0).toUpperCase() + o.agent.slice(1)) + ' · ' : '') + (o.source || 'System');
+  modal.style.display = 'flex';
+  frame.removeAttribute('src');
+  frame.srcdoc = '<html><head><meta charset="utf-8"></head><body style="margin:0;background:#0f0f17;color:#888;font-family:-apple-system,Segoe UI,Roboto,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;font-size:13px">Loading…</body></html>';
+  try {
+    const res = await fetch(API + '/outputs/file?path=' + encodeURIComponent(o.path), {
+      headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+    });
+    if (res.status === 401) {
+      // Session expired — show login, close viewer
+      modal.style.display = 'none';
+      localStorage.removeItem('moirai_token');
+      localStorage.removeItem('moirai_refresh');
+      localStorage.removeItem('moirai_user');
+      authToken = null;
+      authShowLogin();
+      return;
+    }
+    const ctype = res.headers.get('Content-Type') || '';
+    if (!res.ok) {
+      const msg = await res.text().catch(() => 'failed to load');
+      frame.srcdoc = '<html><body style="color:#f87171;font-family:sans-serif;padding:24px">Error: ' + msg.slice(0, 200) + '</body></html>';
+      return;
+    }
+    if (ctype.indexOf('application/json') >= 0) {
+      // Binary/image/pdf — base64 payload for inline preview
+      const d = await res.json();
+      if (d && d.b64) frame.src = 'data:' + (d.mime || 'application/octet-stream') + ';base64,' + d.b64;
+      else frame.srcdoc = '<html><body style="color:#f87171;font-family:sans-serif;padding:24px">Empty payload</body></html>';
+    } else {
+      // Rendered HTML (markdown / raw / html)
+      frame.srcdoc = await res.text();
+    }
+  } catch(e) {
+    frame.srcdoc = '<html><body style="color:#f87171;font-family:sans-serif;padding:24px">Error: ' + (e.message || 'failed to load') + '</body></html>';
+  }
+}
+
+function outputsViewerClose() {
+  const modal = document.getElementById('output-viewer');
+  const frame = document.getElementById('output-viewer-frame');
+  if (modal) modal.style.display = 'none';
+  if (frame) { frame.removeAttribute('src'); frame.srcdoc = ''; }
+}
+
+// ═══ REPORTS ═══
+async function loadReports() {
+  const el = document.getElementById('reports-list');
+  el.innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    const d = await authFetch('/reports/list');
+    if (!d || !d.reports || !d.reports.length) {
+      el.innerHTML = '<div class="empty">No reports yet.<br>Complete a goal or task to generate a report.</div>';
+      const navBadge = document.getElementById('nav-reports-count');
+      if(navBadge) navBadge.textContent = '0';
+      return;
+    }
+    const navBadge = document.getElementById('nav-reports-count');
+    if(navBadge) navBadge.textContent = d.reports.length;
+    el.innerHTML = `<div style="display:flex;flex-direction:column;gap:8px">` +
+      d.reports.map(r => {
+        const mtime = new Date(r.mtime * 1000).toLocaleString('en-AU', {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+        const isGoal = r.name.startsWith('goal-');
+        const icon = isGoal ? '🎯' : '⚡';
+        const title = r.name.replace(/^\w+-/,'').replace(/-\d{8}-\d{6}$/,'').replace(/_/g,' ');
+        return `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
+          <span style="font-size:20px">${icon}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${title}</div>
+            <div style="font-size:10px;color:var(--text-dim);margin-top:2px">${mtime} · ${(r.size/1024).toFixed(1)}KB</div>
+          </div>
+          <a href="/reports/${r.file}" target="_blank" class="btn primary" style="font-size:11px;padding:5px 12px;text-decoration:none;flex-shrink:0">📊 Open</a>
+        </div>`;
+      }).join('') + '</div>';
+  } catch(e) {
+    el.innerHTML = `<div class="empty" style="color:var(--red)">Error loading reports: ${e.message}</div>`;
+  }
+}
+
+async function generateGoalReport(goalId) {
+  const g = goals.find(x=>x.id===goalId);
+  if(!g) return;
+  const tasks = g.tasks || [];
+  const completedTasks = tasks.filter(t=>t.status==='completed');
+  const taskOutputs = completedTasks.map(t => `### ${t.title}\n\nAgent: ${t.agent}\nStatus: ${t.status}\n\n${t.output||'No output'}`).join('\n\n---\n\n');
+  const content = `# Goal Report: ${g.title}\n\n${g.desc||''}\n\n## Progress\n\n${completedTasks.length}/${tasks.length} tasks completed\n\n## Task Outputs\n\n${taskOutputs||'No completed tasks yet.'}\n\n## Summary\n\nGenerated: ${new Date().toLocaleString('en-AU')}`;
+  try {
+    const d = await authFetch('/reports/generate', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({type:'goal', title:g.title, content, goal_id:goalId, status_val:g.status, output_paths: completedTasks.map(t=>t.output_path).filter(Boolean)})
+    });
+    if(d && d.ok && d.report_path) {
+      g.report_path = d.report_path;
+    }
+  } catch(e) { console.error('Report generation failed:', e); }
+}
+
+async function generateAllReports() {
+  let count = 0;
+  for(const g of goals) {
+    if(g.status==='completed'&&!g.report_path) {
+      await generateGoalReport(g.id);
+      count++;
+    }
+  }
+  if(count>0) { loadReports(); loadGoals(); }
+  else alert('All completed goals already have reports.');
+}
+
+async function triggerBackup() {
+  const d = await authFetch('/backup/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+  if (!d) { alert('Backup failed — server not responding.'); return; }
+  if (d.committed) {
+    alert(`✅ Backup complete!\n${d.summary}\nCommit: ${d.commit.slice(0,8)}`);
+    loadStats();
+  } else if (d.reason) {
+    alert('ℹ️ ' + d.reason);
+  } else {
+    alert('❌ Backup failed: ' + (d.error || 'Unknown error'));
+  }
+}
+
+async function loadRecentActivity() {
+  const el = document.getElementById('recent-activity');
+  if(!el) return;
+  el.innerHTML = '<div class="empty">No recent activity yet.<br>Run the feedback loop or save notes to see activity here.</div>';
+  loadStats();
+}
+
+// ═══ SEMANTIC FILENAME SEARCH ═══
+// Searches vault files, notes, and goals by keyword
+let _searchMode = 'keyword';  // 'keyword' | 'semantic'
+let _searchTimer = null;
+
+function toggleSearchMode() {
+  _searchMode = (_searchMode === 'keyword') ? 'semantic' : 'keyword';
+  const label = document.getElementById('search-mode-label');
+  if (label) label.textContent = (_searchMode === 'semantic') ? '🧠 Semantic' : '🔤 Keyword';
+  const inp = document.getElementById('search');
+  if (inp && inp.value.length >= 2) doSearchVault(inp.value);
+}
+
+function doSearchVault(query) {
+  const box = document.getElementById('search-results');
+  if (!box) return;
+  if (!query || query.length < 2) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  if (_searchTimer) clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(async () => {
+    const endpoint = (_searchMode === 'semantic') ? '/api/vault/semantic' : '/api/vault/search';
+    try {
+      const r = await authFetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: query, top_k: 12 }),
+      });
+      if (!r) { box.style.display = 'none'; return; }
+      const results = r.results || [];
+      if (!results.length) {
+        box.innerHTML = `<div style="padding:14px;color:var(--text-dim);font-size:13px;text-align:center">No matches in ${_searchMode} mode</div>`;
+        box.style.display = 'block';
+        return;
+      }
+      const modeTag = (_searchMode === 'semantic')
+        ? `<span style="font-size:10px;color:var(--accent);margin-left:6px">🧠 semantic</span>`
+        : `<span style="font-size:10px;color:var(--text-dim);margin-left:6px">🔤 keyword</span>`;
+      box.innerHTML = `<div style="padding:4px 8px 8px;font-size:11px;color:var(--text-dim)">${results.length} result${results.length>1?'s':''}${modeTag}</div>` +
+        results.map(res => `
+          <div class="cmd-item" style="cursor:pointer" onmousedown="openVaultResult('${encodeURIComponent(res.path)}')">
+            <span class="cmd-icon">📄</span>
+            <div style="flex:1;min-width:0">
+              <div class="cmd-label" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${res.name}</div>
+              <div style="font-size:11px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${res.snippet||''}</div>
+            </div>
+            <span class="cmd-hint">${res.folder||''}</span>
+          </div>`).join('');
+      box.style.display = 'block';
+    } catch (e) {
+      box.style.display = 'none';
+    }
+  }, 220);
+}
+
+async function openVaultResult(encodedPath) {
+  const path = decodeURIComponent(encodedPath);
+  const box = document.getElementById('search-results');
+  if (box) box.style.display = 'none';
+  // Jump to the vault view and open the file there if a reader exists.
+  go('graph');
+  try {
+    if (typeof vaultOpen === 'function') { vaultOpen(path); return; }
+  } catch (e) {}
+  // Fallback: navigate directly to the file route if present.
+  if (typeof openVaultFile === 'function') { try { openVaultFile(path); } catch (e) {} }
+}
+
+// Close search dropdown when clicking elsewhere
+document.addEventListener('click', (e) => {
+  const box = document.getElementById('search-results');
+  if (!box) return;
+  if (!box.contains(e.target) && e.target.id !== 'search') box.style.display = 'none';
+});
+
+// ═══ KANBAN ═══
+// ── KANBAN WITH SERVER SYNC ──
+let kanbanDirty = false;
+
+async function loadKanban() {
+  // Fetch server-synced board (goal tasks)
+  let serverBoard = {backlog:[],progress:[],review:[],done:[]};
+  try {
+    const r = await authFetch('/kanban');
+    if (r && r.board) serverBoard = r.board;
+  } catch(e){}
+  // Merge with localStorage manual cards
+  let localBoard;
+  try { localBoard = JSON.parse(localStorage.getItem('aos-kanban')) || {backlog:[],progress:[],review:[],done:[]}; }
+  catch(e) { localBoard = {backlog:[],progress:[],review:[],done:[]}; }
+  // Server-synced cards take precedence; append manual-only cards
+  const syncedIds = new Set();
+  for (const lane of ['backlog','progress','review','done']) {
+    for (const c of serverBoard[lane] || []) syncedIds.add(c.id);
+  }
+  for (const lane of ['backlog','progress','review','done']) {
+    const manual = (localBoard[lane] || []).filter(c => !syncedIds.has(c.id));
+    serverBoard[lane] = (serverBoard[lane] || []).concat(manual);
+  }
+  kanban = serverBoard;
+  renderKanban();
+  return kanban;
+}
+
+function renderKanban() {
+  const agentIcons = {hermes:'🦉',developer:'💻',researcher:'🔍',writer:'✍️',antigravity:'🚀',any:'🤖'};
+  const priorityColors = {p1:'rgba(239,68,68,.15)',p2:'rgba(251,191,36,.15)',p3:'rgba(74,222,128,.15)'};
+  const statusDots = {queued:'var(--yellow)',running:'var(--blue)',completed:'var(--green)',failed:'var(--red)',in_progress:'var(--blue)'};
+  ['backlog','progress','review','done'].forEach(c=>{
+    document.getElementById('kc-'+c).textContent = kanban[c].length;
+    document.getElementById('col-'+c).innerHTML = kanban[c].map((card,i)=>{
+      const ai = agentIcons[card.agent] || '🤖';
+      const pbg = priorityColors[card.priority] || '';
+      const isSynced = card.synced;
+      const statusDot = isSynced && card.task_id ? `<span style="width:7px;height:7px;border-radius:50%;background:${statusDots[card.status]||'var(--text-dim)'};display:inline-block;margin-right:4px;vertical-align:middle"></span>` : '';
+      const goalTag = card.goal_title ? `<div class="kanban-tag" style="background:rgba(124,91,245,.12);color:var(--accent);font-size:9px" title="${card.goal_title}">🎯 ${card.goal_title.slice(0,30)}</div>` : '';
+      const triggers = (card.triggers||[]).map(t=>`<span class="kanban-tag" style="font-size:9px">${t}</span>`).join('');
+      return `
+      <div class="kanban-card" draggable="${!isSynced}" ondragstart="${isSynced ? '' : `dragStart(event,'${c}',${i})`}" ondragover="dragOver(event)" ondrop="${isSynced ? '' : `drop(event,'${c}',${i})`}" style="border-left:3px solid ${pbg ? 'var(--accent)' : 'var(--border)'}">
+        <div class="kanban-card-title">${statusDot} ${ai} ${card.title}</div>
+        ${card.desc?`<div class="kanban-card-desc">${card.desc.slice(0,120)}</div>`:''}
+        <div class="kanban-card-tags">${goalTag}${triggers}</div>
+      </div>`;
+    }).join('');
+  });
+}
+let dragSrc = null;
+function dragStart(e,col,i){ dragSrc={col,i}; e.dataTransfer.effectAllowed='move'; }
+function dragOver(e){ e.preventDefault(); }
+function drop(e,tgtCol,tgtI){
+  e.preventDefault();
+  if(!dragSrc || dragSrc.col===tgtCol) return;
+  const card = kanban[dragSrc.col].splice(dragSrc.i,1)[0];
+  // Manual drag only allowed for non-synced cards
+  if (card.synced) { dragSrc=null; return; }
+  kanban[tgtCol].splice(tgtI,0,card);
+  kanbanDirty = true;
+  renderKanban(); saveKanban();
+}
+function addCard(col) {
+  const t = prompt('Task title:');
+  if(!t) return;
+  kanban[col].push({title:t,desc:'',tags:[],synced:false});
+  kanbanDirty = true;
+  renderKanban(); saveKanban();
+}
+function saveKanban(){
+  // Save manual cards to localStorage
+  const localOnly = {backlog:[],progress:[],review:[],done:[]};
+  for (const lane of ['backlog','progress','review','done']) {
+    localOnly[lane] = (kanban[lane]||[]).filter(c => !c.synced);
+  }
+  localStorage.setItem('aos-kanban', JSON.stringify(localOnly));
+  // Push manual cards to server for persistence
+  authFetch('/kanban/sync', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({cards: localOnly}),
+  });
+}
+
+// ═══ GOALS ═══
+function clearGoalForm() {
+  document.getElementById('goal-title').value = '';
+  document.getElementById('goal-desc').value = '';
+  document.getElementById('goal-priority').value = 'p2';
+  document.getElementById('goal-agent').value = 'hermes';
+  document.getElementById('goal-title').focus();
+}
+
+// ── GOALS (API-backed) ──
+
+function refreshGoals() { loadGoals(); loadCheckpoints(); }
+
+async function loadGoals() {
+  const data = await authFetch('/goals');
+  goals = data ? data.goals : [];
+  const el = document.getElementById('goals-list');
+  const prev = document.getElementById('goals-preview');
+  if(!goals.length) {
+    const empty = '<div class="empty">No goals yet.<br>Click <strong>+ Add Goal</strong> to create one.</div>';
+    el.innerHTML = empty;
+    if(prev) prev.innerHTML = empty;
+    loadStats();
+    loadCheckpoints();
+    return;
+  }
+  const agentIcons = {hermes:'🦉', antigravity:'🚀', codex:'📝', developer:'💻', researcher:'🔍', writer:'✍️', any:'🤖'};
+  const statusLabels = {active:'Active', decomposed:'Decomposed', in_progress:'In Progress', completed:'Completed', failed:'Failed', paused:'⏸ Paused', paused_guard:'🛑 Guard Triggered'};
+
+  const renderTask = (t) => `
+    <div class="goal-task-item">
+      <span class="task-status ${t.status}"></span>
+      <span class="task-title" title="${t.title.replace(/"/g,'&quot;')}">${t.title.replace(/^You are acting as.*?\n/,'').slice(0,55)}</span>
+      <span class="task-agent">${agentIcons[t.agent]||'🤖'} ${t.agent}</span>
+      <span class="goal-status-badge ${t.status}">${t.status}</span>
+      ${t.status==='completed'&&t.report_path ? `<a href="/reports/${t.report_path.split('/').pop()}" target="_blank" style="font-size:10px;color:var(--accent);text-decoration:none;margin-left:4px" title="View report">📊 Report</a>` : ''}
+      ${t.updated ? `<span style="font-size:9px;color:var(--text-dim);margin-left:4px">${new Date(t.updated).toLocaleString('en-AU',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</span>` : ''}
+    </div>`;
+
+  const renderGoal = (g) => {
+    const tasks = g.tasks || [];
+    const completed = tasks.filter(t=>t.status==='completed').length;
+    const total = tasks.length;
+    const pct = total ? Math.round((completed/total)*100) : 0;
+    const taskHtml = tasks.length ? `<div class="goal-tasks">${tasks.map(renderTask).join('')}</div>` : '';
+    const progressHtml = total ? `<div class="goal-progress"><div class="goal-progress-bar" style="width:${pct}%"></div></div>` : '';
+    const canDecompose = g.status === 'active' || g.status === 'decomposed';
+    const decomposeBtn = canDecompose ? `<button onclick="decomposeGoal('${g.id}')" style="font-size:10px;padding:2px 8px;background:rgba(124,91,245,.15);color:var(--accent);border:1px solid rgba(124,91,245,.3);border-radius:4px;cursor:pointer">⚡ Decompose</button>` : '';
+    const guardInfo = g.guard_triggered ? `<div class="goal-guard-info"><span class="guard-label">🛑 Guard:</span> ${g.guard_triggered}</div>` : '';
+    const loopInfo = g.loop_iterations ? `<div class="goal-loop-info">🔄 Iteration ${g.loop_iterations} · ${completed}/${total} tasks</div>` : '';
+    // Verification display
+    let verifyInfo = '';
+    let verifyBtn = '';
+    if (g.verification_scores && g.verification_scores.length > 0) {
+      const scores = g.verification_scores.filter(s => typeof s.score === 'number');
+      if (scores.length > 0) {
+        const avg = (scores.reduce((a, b) => a + b.score, 0) / scores.length);
+        const avgPct = Math.round(avg * 100);
+        const passCount = scores.filter(s => s.status === 'pass').length;
+        const partialCount = scores.filter(s => s.status === 'partial').length;
+        const failCount = scores.filter(s => s.status === 'fail').length;
+        const qualityColor = avg >= 0.8 ? 'var(--green)' : avg >= 0.5 ? 'var(--yellow)' : 'var(--red)';
+        const qualityLabel = avg >= 0.8 ? '✅' : avg >= 0.5 ? '🟡' : '🔴';
+        verifyInfo = `<div class="goal-verify-info">${qualityLabel} Quality: <span style="color:${qualityColor};font-weight:600">${avgPct}%</span> <span style="color:var(--text-dim);font-size:10px">(${passCount}✓ ${partialCount}∼ ${failCount}✗)</span></div>`;
+        verifyBtn = `<button onclick="verifyGoal('${g.id}')" style="font-size:10px;padding:2px 8px;background:rgba(124,91,245,.1);color:var(--accent);border:1px solid rgba(124,91,245,.2);border-radius:4px;cursor:pointer" title="Re-verify all done tasks">🔍 Verify</button>`;
+      }
+    } else {
+      verifyBtn = `<button onclick="verifyGoal('${g.id}')" style="font-size:10px;padding:2px 8px;background:rgba(124,91,245,.1);color:var(--accent);border:1px solid rgba(124,91,245,.2);border-radius:4px;cursor:pointer" title="Verify all done tasks">🔍 Verify</button>`;
+    }
+    const pauseBtn = (g.status === 'in_progress' || g.status === 'active') ? `<button onclick="pauseGoal('${g.id}')" style="font-size:10px;padding:2px 8px">⏸ Pause</button>` : '';
+    const resumeBtn = (g.status === 'paused' || g.status === 'paused_guard') ? `<button onclick="resumeGoal('${g.id}')" style="font-size:10px;padding:2px 8px;background:rgba(74,222,128,.15);color:var(--green);border:1px solid rgba(74,222,128,.3);border-radius:4px;cursor:pointer">▶ Resume</button>` : '';
+    const cpSaveBtn = `<button onclick="saveCheckpoint('${g.id}')" style="font-size:10px;padding:2px 8px;background:rgba(59,130,246,.1);color:var(--accent);border:1px solid rgba(59,130,246,.2);border-radius:4px;cursor:pointer" title="Save checkpoint">💾 CP</button>`;
+    const cpDeleteBtn = `<button onclick="deleteCheckpoint('${g.id}')" style="font-size:10px;padding:2px 8px" title="Delete checkpoint">🗑 CP</button>`;
+    return `
+    <div class="goal-card ${g.status==='completed'?'goal-done':''}">
+      <div class="goal-title">${g.title}</div>
+      ${g.desc?`<div class="goal-desc">${g.desc}</div>`:''}
+      ${g.updated?`<div style="font-size:10px;color:var(--text-dim);margin-top:2px">Updated: ${new Date(g.updated).toLocaleString('en-AU',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>`:''}
+      <div class="goal-meta">
+        <span class="goal-priority ${g.priority}">${g.priority==='p1'?'🔴 P1':g.priority==='p2'?'🟡 P2':'🟢 P3'}</span>
+        <span class="goal-status-badge ${g.status}">${statusLabels[g.status]||g.status}</span>
+        <div class="goal-actions">
+          ${decomposeBtn}
+          ${pauseBtn}
+          ${resumeBtn}
+          ${cpSaveBtn}
+          ${cpDeleteBtn}
+          ${verifyBtn}
+          ${g.status==='completed'&&g.report_path ? `<a href="/reports/${g.report_path.split('/').pop()}" target="_blank" class="btn" style="font-size:10px;padding:2px 8px;text-decoration:none">📊 Report</a>` : ''}
+          <button onclick="toggleGoal('${g.id}');if(g.status!=='completed'){generateGoalReport('${g.id}');}" class="${g.status==='completed'?'':'primary'}">${g.status==='completed'?'↩ Undo':'✓ Done'}</button>
+          <button class="danger" onclick="deleteGoal('${g.id}')">✕</button>
+        </div>
+      </div>
+      ${guardInfo}
+      ${loopInfo}
+      ${verifyInfo}
+      ${progressHtml}
+      ${taskHtml}
+    </div>`;
+  };
+
+  el.innerHTML = goals.map(renderGoal).join('');
+  if(prev) {
+    const active = goals.filter(g=>g.status!=='completed').slice(0,3);
+    prev.innerHTML = active.length ? active.map(renderGoal).join('') : '<div class="empty">All goals complete! 🎉</div>';
+  }
+  // Also refresh task runner status
+  refreshRunnerStatus();
+}
+
+async function saveGoal() {
+  const title = document.getElementById('goal-title').value.trim();
+  if(!title) return;
+  const goalData = {
+    title,
+    desc: document.getElementById('goal-desc').value.trim(),
+    priority: document.getElementById('goal-priority').value,
+    agent: document.getElementById('goal-agent').value,
+  };
+  const result = await authFetch('/goals/create', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(goalData),
+  });
+  if(result && result.ok) {
+    document.getElementById('goal-title').value = '';
+    document.getElementById('goal-desc').value = '';
+    document.getElementById('goal-form').style.display = 'none';
+    loadGoals();
+    // Auto-decompose
+    if(confirm('Goal saved! Auto-decompose into tasks now?')) {
+      decomposeGoal(result.goal.id);
+    }
+  }
+}
+
+async function decomposeGoal(goalId) {
+  const result = await authFetch('/goals/decompose', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({id: goalId}),
+  });
+  if(result && result.ok) {
+    loadGoals();
+  } else {
+    alert('Decompose failed: ' + (result && result.error ? result.error : 'Unknown error'));
+  }
+}
+
+async function toggleGoal(id) {
+  const g = goals.find(x=>x.id===id);
+  if(!g) return;
+  const newStatus = g.status === 'completed' ? 'active' : 'completed';
+  await authFetch('/goals/update', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({id, status: newStatus}),
+  });
+  loadGoals();
+}
+
+async function deleteGoal(id) {
+  if(!confirm('Delete this goal and unlink its tasks?')) return;
+  const result = await authFetch('/goals/delete', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({goal_id: id}),
+  });
+  if(result && result.ok) {
+    loadGoals();
+  } else {
+    const detail = result ? (`${result.error||''} ${result.code||''} ${result.message||''}`.trim()) : 'no response (check server)';
+    alert('Failed to delete goal: ' + detail);
+  }
+}
+
+async function pauseGoal(id) {
+  if(!confirm('Pause this goal? It will stop after the current task finishes.')) return;
+  const result = await authFetch('/goals/' + id + '/pause', {method: 'POST'});
+  if(result && result.ok) {
+    loadGoals();
+  } else {
+    alert('Failed to pause goal: ' + (result && result.error || 'Unknown error'));
+  }
+}
+
+async function resumeGoal(id) {
+  const result = await authFetch('/goals/' + id + '/resume', {method: 'POST'});
+  if(result && result.ok) {
+    loadGoals();
+  } else {
+    alert('Failed to resume goal: ' + (result && result.error || 'Unknown error'));
+  }
+}
+
+async function saveCheckpoint(id) {
+  const result = await authFetch('/goals/' + id + '/checkpoint/save', {method: 'POST'});
+  if(result && result.ok) {
+    const cp = result.checkpoint;
+    const tasks = cp ? (cp.tasks || []).length : 0;
+    alert('✅ Checkpoint saved! (' + tasks + ' tasks backed up)');
+  } else {
+    alert('Failed to save checkpoint: ' + (result && result.error || 'Unknown error'));
+  }
+}
+
+async function deleteCheckpoint(id) {
+  if(!confirm('Delete checkpoint for this goal? This removes the saved state for resume.')) return;
+  const result = await authFetch('/goals/' + id + '/checkpoint/delete', {method: 'POST'});
+  if(result && result.ok) {
+    alert('✅ Checkpoint deleted');
+  } else {
+    alert('Failed to delete checkpoint: ' + (result && result.error || 'Unknown error'));
+  }
+}
+
+async function verifyGoal(id) {
+  const btn = document.querySelector(`button[onclick="verifyGoal('${id}')"]`);
+  if(btn) { btn.textContent = '⏳ Verifying...'; btn.disabled = true; }
+  try {
+    const result = await authFetch('/goals/' + id + '/verify', {method: 'POST'});
+    if(result && result.ok) {
+      const verdicts = result.verdicts || [];
+      const passCount = verdicts.filter(v => v.status === 'pass').length;
+      const partialCount = verdicts.filter(v => v.status === 'partial').length;
+      const failCount = verdicts.filter(v => v.status === 'fail').length;
+      const avgScore = verdicts.length ? (verdicts.reduce((a, v) => a + (v.score || 0), 0) / verdicts.length * 100).toFixed(0) : 0;
+      alert('✅ Verification complete!\n\n' +
+        `Verified: ${verdicts.length} tasks\n` +
+        `Average score: ${avgScore}%\n` +
+        `Pass: ${passCount} | Partial: ${partialCount} | Fail: ${failCount}`);
+      loadGoals(); // Refresh to show updated scores
+    } else {
+      alert('Verification failed: ' + (result && result.error || 'Unknown error'));
+    }
+  } finally {
+    if(btn) { btn.textContent = '🔍 Verify'; btn.disabled = false; }
+  }
+}
+
+async function loadCheckpoints() {
+  const el = document.getElementById('checkpoints-list');
+  if(!el) return;
+  const result = await authFetch('/checkpoints');
+  if(result && result.ok && result.checkpoints && result.checkpoints.length) {
+    el.innerHTML = result.checkpoints.map(cp => `
+      <div class="checkpoint-item">
+        <span class="cp-goal">${cp.title || cp.goal_id}</span>
+        <span class="cp-status goal-status-badge ${cp.status}">${cp.status}</span>
+        <span class="cp-time">Iter ${cp.loop_iterations || 0} · ${cp.tasks_completed}/${cp.tasks_total}</span>
+        <span class="cp-time">${cp.saved_at ? new Date(cp.saved_at).toLocaleString('en-AU',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : ''}</span>
+      </div>
+    `).join('');
+  } else {
+    el.innerHTML = '<div class="empty">No checkpoints saved</div>';
+  }
+}
+
+// ═══ DAILY NOTES ═══
+async function loadDaily() {
+  const notes = await authFetch('/daily') || [];
+  const el = document.getElementById('daily-list');
+  const prev = document.getElementById('daily-preview');
+  if (!el) return; // daily view removed; nothing to render
+  if(!notes.length) {
+    el.innerHTML = '<div class="empty">No daily notes yet.<br>Run the feedback loop to generate them.</div>';
+    if(prev) prev.innerHTML = el.innerHTML;
+    return;
+  }
+  // Check if today's note exists, if not trigger generation
+  const today = new Date().toISOString().slice(0,10);
+  const hasToday = notes.some(n => n.date === today);
+  if(!hasToday) {
+    // Trigger today's note generation in background
+    authFetch('/daily/today').then(r => { if(r && r.ok) loadDaily(); });
+  }
+  const html = notes.slice(0,7).map(n=>{
+    const isToday = n.date === today;
+    const badge = isToday ? '<span style="background:var(--accent);color:#fff;font-size:10px;padding:2px 6px;border-radius:4px;margin-left:6px">TODAY</span>' : '';
+    const highlight = isToday ? 'border-color:var(--accent);background:rgba(59,130,246,0.05)' : '';
+    return `<div class="memory-item" style="${highlight}"><div style="font-size:13px;font-weight:600;margin-bottom:6px">📅 ${n.date}${badge}</div><div class="memory-text">${n.content.replace(/\n/g,'<br>')}</div></div>`;
+  }).join('');
+  el.innerHTML = html;
+  // Dashboard preview: show today's note if exists, otherwise most recent
+  const todayNote = notes.find(n => n.date === today);
+  const previewNote = todayNote || notes[0];
+  const previewHtml = `<div class="memory-item"${todayNote?' style="border-color:var(--accent);background:rgba(59,130,246,0.05)"':''}><div style="font-size:13px;font-weight:600;margin-bottom:6px">📅 ${previewNote.date}${todayNote?'<span style="background:var(--accent);color:#fff;font-size:10px;padding:2px 6px;border-radius:4px;margin-left:6px">TODAY</span>':'<span style="font-size:10px;color:var(--text-dim);margin-left:6px">Latest</span>'}</div><div class="memory-text">${previewNote.content.replace(/\n/g,'<br>')}</div></div>`;
+  if(prev) prev.innerHTML = previewHtml;
+}
+
+// ═══ CONTEXT ═══
+let ctxFiles = [];
+let ctxActive = null;
+
+async function loadContext() {
+  const container = document.getElementById('ctx-content');
+  const tabs = document.getElementById('ctx-tabs');
+  if (!container) return; // context view removed; nothing to render
+  try {
+    const data = await authFetch('/vault/list?folder=context');
+    ctxFiles = (data && data.files) || [];
+    if (!ctxFiles.length) {
+      container.innerHTML = '<div class="empty">No context files found.</div>';
+      return;
+    }
+    // Render tabs
+    tabs.innerHTML = ctxFiles.map(f => {
+      const name = f.name.replace('.md','').replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+      const active = f.id === ctxActive ? 'background:var(--accent);color:#fff' : '';
+      return `<button class="btn" style="font-size:12px;padding:4px 10px;${active}" onclick="openCtxFile('${f.id}')">${name}</button>`;
+    }).join('');
+    // Auto-open first or previously active
+    const toOpen = ctxActive && ctxFiles.find(f=>f.id===ctxActive) ? ctxActive : ctxFiles[0].id;
+    openCtxFile(toOpen);
+  } catch(e) {
+    container.innerHTML = '<span style="color:var(--red)">Unable to load context files.</span>';
+    console.error('loadContext error:', e);
+  }
+}
+
+async function openCtxFile(id) {
+  ctxActive = id;
+  const container = document.getElementById('ctx-content');
+  const tabs = document.getElementById('ctx-tabs');
+  if (!container) return; // context view removed
+  // Update tab styles
+  if (tabs) {
+    Array.from(tabs.querySelectorAll('btn, button')).forEach(b => {
+      b.style.background = (b.getAttribute('onclick') && b.getAttribute('onclick').includes("'"+id+"'")) ? 'var(--accent)' : '';
+      b.style.color = (b.getAttribute('onclick') && b.getAttribute('onclick').includes("'"+id+"'")) ? '#fff' : '';
+    });
+  }
+  container.innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    const data = await authFetch('/vault/read?path=' + encodeURIComponent(id));
+    const t = data && data.content ? (data.content.content || data.content) : 'File is empty.';
+    container.innerHTML = '<pre style="white-space:pre-wrap;font-family:inherit;font-size:13px;line-height:1.7">'+t+'</pre>';
+  } catch(e) {
+    container.innerHTML = '<span style="color:var(--red)">Unable to read context file.</span>';
+  }
+}
+
+// ═══ FEEDBACK LOOP ═══
+async function runLoop() {
+  const btn = document.querySelector('#loop-content .btn, #loop-preview .btn');
+  if(btn) { btn.textContent = '⏳ Running…'; btn.disabled = true; }
+  const r = await authFetch('/loop');
+  const ok = r && r.ok;
+  const msg = ok ? '✅ Loop complete! Indexed workspace files into memory vault.' : (r&&r.error)||'Loop failed.';
+  const lc = document.getElementById('loop-content');
+  if (lc) lc.innerHTML = `<div class="memory-item"><div class="memory-text">${msg}</div><div class="memory-time">${new Date().toLocaleTimeString()}</div></div>`;
+  loadRecentActivity(); loadDaily(); loadStats();
+  if(btn) { btn.textContent = '⚡ Run Again'; btn.disabled = false; }
+}
+
+// ═══ QUICK NOTE ═══
+function quickNote() {
+  const n = prompt('Quick note:');
+  if(!n) return;
+  authFetch('/note',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({note:n})});
+  const el = document.getElementById('daily-preview');
+  const div = document.createElement('div');
+  div.className='memory-item';
+  div.innerHTML=`<div class="memory-text">${n}</div><div class="memory-time">Just now · Manual</div>`;
+  el.prepend(div);
+}
+
+// ═══ AGENT DETAIL ═══
+function showAgent(name) {
+  const agents = {
+    hermes: { name:'Hermes', desc:'General-purpose · Local · Active', icon:'🦉', color:'#4ade80', model:'openrouter/owl-alpha', status:'Connected — running on this machine' },
+    antigravity: { name:'Google Antigravity', desc:'Multi-agent CLI · IDE · Active', icon:'🚀', color:'#4ade80', model:'Gemini (via Google Pro)', status:'Connected — Antigravity IDE installed, CLI available' },
+    codex: { name:'Codex', desc:'Code generation · Not connected', icon:'📝', color:'#fbbf24', model:'Not configured', status:'Not connected — configure in agents/manifest.md' }
+  };
+  const a = agents[name];
+  if(!a) return;
+  go('agents');
+  const list = document.getElementById('agents-list');
+  if(list) {
+    list.innerHTML = `
+      <div style="padding:14px;background:var(--bg);border-radius:8px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <span style="font-size:28px">${a.icon}</span>
+          <div>
+            <div style="font-size:16px;font-weight:600">${a.name}</div>
+            <div style="font-size:12px;color:var(--text-dim);margin-top:2px">${a.desc}</div>
+          </div>
+          <span class="agent-dot" style="background:${a.color};margin-left:auto;width:10px;height:10px"></span>
+        </div>
+        <div style="font-size:12px;color:var(--text-dim);line-height:1.8">
+          <strong>Status:</strong> ${a.status}<br>
+          <strong>Model:</strong> ${a.model}<br>
+          <strong>Config:</strong> <code>memory-vault/agents/manifest.md</code>
+        </div>
+      </div>
+      <div class="agent-card" onclick="showAgent('hermes')" style="cursor:pointer"><div class="agent-icon">🦉</div><div class="agent-info"><div class="agent-name">Hermes</div><div class="agent-desc">General-purpose · Local · Active</div></div><span class="agent-dot on"></span></div>
+      <div class="agent-card" onclick="showAgent('antigravity')" style="cursor:pointer"><div class="agent-icon">🚀</div><div class="agent-info"><div class="agent-name">Google Antigravity</div><div class="agent-desc">Multi-agent CLI · IDE · Active</div></div><span class="agent-dot on"></span></div>
+      <div class="agent-card" onclick="showAgent('codex')" style="cursor:pointer"><div class="agent-icon">📝</div><div class="agent-info"><div class="agent-name">Codex</div><div class="agent-desc">Code generation · Not connected</div></div><span class="agent-dot off"></span></div>
+    `;
+  }
+}
+
+// ═══ KNOWLEDGE GRAPH ═══
+let graphData = null;
+let tasksData = [];
+
+// ═══ TASK QUEUE ═══
+async function loadTasks() {
+  const data = await authFetch('/tasks');
+  tasksData = (data && data.tasks) || [];
+  document.getElementById('nav-tasks-count').textContent = tasksData.length;
+  renderTasks();
+}
+
+function renderTasks() {
+  const cols = {queued:'queued',progress:'progress',review:'review',done:'done',failed:'failed'};
+  const counts = {queued:0,progress:0,review:0,done:0,failed:0};
+  const agentIcons = {hermes:'🦉',antigravity:'🚀',codex:'📝',any:'🤖'};
+  const statusLabels = {queued:'📋 Queued',progress:'⏳ In Progress',review:'👀 Review',done:'✅ Done',failed:'❌ Failed'};
+  const nextStatus = {queued:'progress',progress:'review',review:'done',done:'queued',failed:'queued'};
+
+  for (const t of tasksData) {
+    const s = t.status || 'queued';
+    if (counts[s] !== undefined) counts[s]++;
+    const col = document.getElementById('col-' + s);
+    if (!col) continue;
+    const agent = agentIcons[t.agent] || '🤖';
+    const pri = t.priority === 'p1' ? '🔴' : t.priority === 'p2' ? '🟡' : '🟢';
+    col.innerHTML += `
+      <div class="task-card">
+        <div class="task-card-title">${pri} ${t.title}</div>
+        ${t.desc ? `<div class="task-card-desc">${t.desc}</div>` : ''}
+        ${t.skills && t.skills.length ? `<div class="task-card-skills" style="font-size:10px;color:var(--accent);margin-top:4px">⚡ ${t.skills.join(', ')}</div>` : ''}
+        <div class="task-card-meta">
+          <span class="task-card-agent">${agent} ${t.agent}</span>
+          <div class="task-card-actions">
+            <button class="task-status-btn" onclick="updateTaskStatus('${t.id}','${nextStatus[s]}')" title="Move to ${nextStatus[s]}">→</button>
+            <button class="danger" onclick="deleteTask('${t.id}')">✕</button>
+          </div>
+        </div>
+      </div>`;
+  }
+  for (const [k,v] of Object.entries(counts)) {
+    const el = document.getElementById('tc-' + k);
+    if (el) el.textContent = v;
+  }
+}
+
+function toggleTaskForm() {
+  const f = document.getElementById('task-form');
+  f.style.display = f.style.display === 'none' ? 'flex' : 'none';
+}
+
+async function createTask() {
+  const title = document.getElementById('task-title').value.trim();
+  if (!title) return;
+  const r = await authFetch('/tasks/create', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      title,
+      desc: document.getElementById('task-desc').value.trim(),
+      agent: document.getElementById('task-agent').value,
+      priority: document.getElementById('task-priority').value,
+      skills: document.getElementById('task-skills').value.trim(),
+    })
+  });
+  if (r && r.ok) {
+    document.getElementById('task-title').value = '';
+    document.getElementById('task-desc').value = '';
+    document.getElementById('task-skills').value = '';
+    document.getElementById('task-form').style.display = 'none';
+    // Clear columns and reload
+    ['queued','progress','review','done','failed'].forEach(s => {
+      const el = document.getElementById('col-' + s);
+      if (el) el.innerHTML = '';
+    });
+    loadTasks();
+  }
+}
+
+async function updateTaskStatus(id, status) {
+  await authFetch('/tasks/update', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({id, status})
+  });
+  ['queued','progress','review','done','failed'].forEach(s => {
+    const el = document.getElementById('col-' + s);
+    if (el) el.innerHTML = '';
+  });
+  loadTasks();
+}
+
+async function deleteTask(id) {
+  if (!confirm('Delete this task?')) return;
+  await authFetch('/tasks/delete', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({id})
+  });
+  ['queued','progress','review','done','failed'].forEach(s => {
+    const el = document.getElementById('col-' + s);
+    if (el) el.innerHTML = '';
+  });
+  loadTasks();
+}
+
+let notesFiles = [], notesFilter = 'all', currentNote = null, noteDirty = false;
+
+
+// ═══ HERMES BRIDGE ═══
+let hermesCtx = null; // { name, content }
+
+async function checkHermesStatus() {
+  try {
+    const r = await authFetch('/hermes/status');
+    const el = document.getElementById('hermes-status');
+    if (el) {
+      if (r && r.ok) {
+        el.textContent = '● Connected';
+        el.style.color = 'var(--green, #4ade80)';
+      } else {
+        el.textContent = '○ Offline';
+        el.style.color = 'var(--text-dim)';
+      }
+    }
+  } catch(e) {
+    const el = document.getElementById('hermes-status');
+    if (el) { el.textContent = '○ Offline'; el.style.color = 'var(--red, #f87171)'; }
+  }
+}
+
+function setHermesContext(name, content) {
+  hermesCtx = { name, content };
+  const bar = document.getElementById('hermes-context-bar');
+  const span = document.getElementById('hermes-context-name');
+  if (bar && span) {
+    bar.style.display = 'flex';
+    span.textContent = name;
+  }
+}
+
+function clearHermesContext() {
+  hermesCtx = null;
+  const bar = document.getElementById('hermes-context-bar');
+  if (bar) bar.style.display = 'none';
+  const span = document.getElementById('hermes-context-name');
+  if (span) span.textContent = '';
+}
+
+function hermesInputKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendToHermes();
+  }
+}
+
+async function sendToHermes() {
+  const input = document.getElementById('hermes-input');
+  const query = (input.value || '').trim();
+  if (!query) return;
+
+  const sendBtn = document.getElementById('hermes-send-btn');
+  const chat = document.getElementById('hermes-chat');
+  const skills = document.getElementById('hermes-skills');
+  const querySkills = skills ? skills.value : '';
+  const routeBadge = document.getElementById('hermes-route-badge');
+
+  // Hide welcome
+  const welcome = document.getElementById('hermes-welcome');
+  if (welcome) welcome.style.display = 'none';
+
+  // Add user message
+  const userDiv = document.createElement('div');
+  userDiv.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:8px 8px 0 8px;padding:10px 14px;align-self:flex-end;max-width:80%;font-size:13px';
+  userDiv.innerHTML = '<span style="color:var(--accent);font-weight:600">You</span><br>' + query.replace(/</g,'&lt;').replace(/\n/g,'<br>');
+  chat.appendChild(userDiv);
+
+  // Add loading indicator
+  const loadingDiv = document.createElement('div');
+  loadingDiv.id = 'hermes-loading';
+  loadingDiv.style.cssText = 'background:var(--bg);border:1px solid var(--border);border-radius:8px 8px 8px 0;padding:10px 14px;align-self:flex-start;max-width:80%;font-size:13px';
+  loadingDiv.innerHTML = '<span style="color:var(--green,#4ade80);font-weight:600">⏳ Routing…</span><br><span style="color:var(--text-dim);font-size:11px">Finding the best agent for this task</span>';
+  chat.appendChild(loadingDiv);
+  chat.scrollTop = chat.scrollHeight;
+
+  // Clear input and disable send
+  input.value = '';
+  if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '⏳'; }
+
+  try {
+    const body = { query, route: true };
+    if (hermesCtx && hermesCtx.content) {
+      body.context = hermesCtx.content;
+    }
+    if (querySkills) {
+      body.skills = querySkills;
+    }
+    const result = await authFetch('/hermes/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    // Remove loading
+    loadingDiv.remove();
+
+    // Show routing badge
+    if (routeBadge && result) {
+      const agentLabel = result.agent_name || result.routed_to || 'Hermes';
+      const confLabel = result.confidence || '';
+      const trigLabel = (result.matched_triggers || []).join(', ') || 'default';
+      routeBadge.style.display = 'inline';
+      routeBadge.textContent = `→ ${agentLabel} (${confLabel})`;
+      routeBadge.title = `Triggers: ${trigLabel}`;
+    }
+
+    // Add response
+    const respDiv = document.createElement('div');
+    respDiv.style.cssText = 'background:var(--bg);border:1px solid var(--border);border-radius:8px 8px 8px 0;padding:10px 14px;align-self:flex-start;max-width:85%;font-size:13px;line-height:1.6';
+    if (result && result.response) {
+      const resp = result.response.replace(/</g,'&lt;').replace(/\n/g,'<br>');
+      const routedTo = result.agent_name ? ` (${result.agent_name})` : '';
+      respDiv.innerHTML = '<span style="color:var(--green,#4ade80);font-weight:600">🦉 Hermes' + routedTo + '</span><br>' + resp;
+    } else {
+      const errMsg = ((result && result.error) || 'No response').replace(/</g,'&lt;');
+      respDiv.innerHTML = '<span style="color:var(--red,#f87171);font-weight:600">🦉 Hermes</span><br><span style="color:var(--text-dim)">Error: ' + errMsg + '</span>';
+    }
+    chat.appendChild(respDiv);
+  } catch(e) {
+    loadingDiv.remove();
+    const errDiv = document.createElement('div');
+    errDiv.style.cssText = 'background:var(--bg);border:1px solid var(--red,#f87171);border-radius:8px;padding:10px 14px;align-self:flex-start;max-width:80%;font-size:13px';
+    errDiv.innerHTML = '<span style="color:var(--red,#f87171)">⚠ Error:</span> ' + e.message;
+    chat.appendChild(errDiv);
+  }
+
+  chat.scrollTop = chat.scrollHeight;
+  if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Send →'; }
+}
+
+function clearHermesChat() {
+  const chat = document.getElementById('hermes-chat');
+  chat.innerHTML = '<div class="empty" id="hermes-welcome">Ask Hermes anything. Send context from your vault files, notes, or task descriptions.<br><br>💡 <strong>Tip:</strong> Open any vault file in Notes editor and click "Send to Hermes" to analyze it.</div>';
+  clearHermesContext();
+}
+
+async function loadHermesConversations() {
+  const chat = document.getElementById('hermes-chat');
+  const welcome = document.getElementById('hermes-welcome');
+  if (welcome) welcome.style.display = 'none';
+
+  const loadingDiv = document.createElement('div');
+  loadingDiv.id = 'hermes-conv-loading';
+  loadingDiv.style.cssText = 'color:var(--text-dim);font-size:13px;padding:12px';
+  loadingDiv.textContent = '⏳ Loading conversations…';
+  chat.appendChild(loadingDiv);
+  chat.scrollTop = chat.scrollHeight;
+
+  try {
+    const result = await authFetch('/hermes/conversations');
+    loadingDiv.remove();
+
+    if (result && result.sessions && result.sessions.length > 0) {
+      const header = document.createElement('div');
+      header.style.cssText = 'font-size:13px;font-weight:600;color:var(--text-dim);padding:8px 0;border-bottom:1px solid var(--border);margin-bottom:8px';
+      header.textContent = '📜 Recent Conversations';
+      chat.appendChild(header);
+
+      result.sessions.forEach(s => {
+        const item = document.createElement('div');
+        item.style.cssText = 'padding:8px 12px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;cursor:pointer;font-size:12px;background:var(--surface)';
+        item.innerHTML = `<div style="color:var(--text-dim);font-size:10px">${s.timestamp || ''}</div><div style="margin-top:2px">${s.query_preview || 'Conversation'}</div>`;
+        item.onclick = () => {
+          const resp = (s.response_preview || '').replace(/</g,'&lt;').replace(/\n/g,'<br>');
+          const histDiv = document.createElement('div');
+          histDiv.style.cssText = 'background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-top:6px;font-size:12px;color:var(--text-dim)';
+          histDiv.innerHTML = resp;
+          item.appendChild(histDiv);
+          item.onclick = null;
+        };
+        chat.appendChild(item);
+      });
+    } else {
+      const empty = document.createElement('div');
+      empty.style.cssText = 'color:var(--text-dim);font-size:13px;padding:12px';
+      empty.textContent = 'No conversations yet. Start chatting above!';
+      chat.appendChild(empty);
+    }
+  } catch(e) {
+    loadingDiv.textContent = '⚠ Could not load conversations';
+  }
+  chat.scrollTop = chat.height;
+}
+
+// Send to Hermes from Notes editor
+async function sendNoteToHermes() {
+  const path = currentNote;
+  if (!path) return;
+  const content = document.getElementById('note-editor').value;
+  if (!content.trim()) return;
+
+  // Switch to Hermes view
+  go('hermes');
+
+  // Set context and pre-fill query
+  setHermesContext(path, content);
+  const input = document.getElementById('hermes-input');
+  input.value = 'Analyse this file and summarise the key points:';
+  input.focus();
+}
+
+// Auto-check Hermes status on load + init dashboard data
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(function() {
+    checkHermesStatus();
+    setupCheck(); // first-run wizard gate (public / setup/status)
+    // If user already has a token (page reload), load dashboard data immediately
+    const existingToken = localStorage.getItem('moirai_token');
+    if (existingToken) {
+      authToken = existingToken;
+      authUser = JSON.parse(localStorage.getItem('moirai_user') || 'null');
+      authUpdateUI();
+      initDashboard();
+    }
+  }, 500);
+});
+
+// Enable/disable hermes button in notes editor
+const _origOpenNote = openNote;
+openNote = async function(id) {
+  const result = await _origOpenNote(id);
+  const btn = document.getElementById('btn-hermes');
+  if (btn) btn.disabled = !id;
+  return result;
+};
+
+// ═══ NOTES EDITOR ═══
+let allNotesFiles = []; // cache for recent/reload without re-fetch
+
+async function loadNotes(folder) {
+  notesFilter = folder || 'all';
+  const el = document.getElementById('notes-file-list');
+  el.innerHTML = '<div class="loading" style="padding:20px">Loading…</div>';
+
+  // "recent" fetches all files and sorts by mtime; otherwise fetch folder-specific
+  if (notesFilter === 'recent') {
+    if (!allNotesFiles.length) {
+      const data = await authFetch('/vault/list?folder=all');
+      allNotesFiles = (data && data.files) || [];
+    }
+    notesFiles = allNotesFiles.sort((a, b) => (b.mtime || 0) - (a.mtime || 0));
+  } else {
+    const data = await authFetch('/vault/list?folder=' + encodeURIComponent(notesFilter));
+    notesFiles = (data && data.files) || [];
+    // Update "all" cache when fetching all
+    if (notesFilter === 'all') allNotesFiles = [...notesFiles];
+  }
+
+  document.getElementById('nav-notes-count') && (document.getElementById('nav-notes-count').textContent = notesFiles.length);
+  // Update folder buttons
+  document.querySelectorAll('#notes-folders .filter-btn').forEach(b => {
+    const match = notesFilter === 'recent'
+      ? b.textContent.toLowerCase() === 'recent'
+      : b.textContent.toLowerCase() === (notesFilter === 'all' ? 'all' : notesFilter);
+    b.classList.toggle('active', match);
+  });
+
+  if (!notesFiles.length) {
+    el.innerHTML = '<div class="empty" style="padding:20px;font-size:12px">No notes yet.<br>Click <strong>+ New</strong> to create one.</div>';
+    return;
+  }
+  el.innerHTML = notesFiles.map(f => {
+    const dateStr = f.mtime ? new Date(f.mtime * 1000).toLocaleDateString('en-AU', {day:'numeric', month:'short', year:'numeric'}) : '';
+    return `
+    <div class="note-file-item ${currentNote === f.id ? 'active' : ''}" onclick="openNote('${f.id.replace(/'/g, "\\'")}')">
+      <span>📄</span>
+      <div style="flex:1;overflow:hidden">
+        <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px">${f.name.replace('.md','')}</div>
+        <div style="font-size:10px;color:var(--text-dim);margin-top:1px">${f.folder} · ${dateStr}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function openNote(id) {
+  if (noteDirty && !confirm('Discard unsaved changes?')) return;
+  const data = await authFetch('/vault/read?path=' + encodeURIComponent(id));
+  if (!data || !data.content) return;
+  currentNote = id;
+  noteDirty = false;
+  document.getElementById('note-path').value = id;
+  document.getElementById('note-editor').value = data.content.content || '';
+  document.getElementById('btn-save').disabled = true;
+  document.getElementById('btn-delete').disabled = false;
+  document.getElementById('note-status').style.display = 'none';
+  switchTab('edit');
+  loadNotes(notesFilter); // refresh active highlight
+}
+
+function onNoteChange() {
+  noteDirty = true;
+  document.getElementById('btn-save').disabled = false;
+  document.getElementById('note-status').style.display = 'none';
+}
+
+async function saveNote() {
+  if (!currentNote) return;
+  const content = document.getElementById('note-editor').value;
+  const r = await authFetch('/vault/save', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({path: currentNote, content})
+  });
+  if (r && r.ok) {
+    noteDirty = false;
+    document.getElementById('btn-save').disabled = true;
+    const st = document.getElementById('note-status');
+    st.textContent = '● Saved';
+    st.style.color = 'var(--green)';
+    st.style.display = 'inline';
+    allNotesFiles = []; // clear cache so Recent view refreshes
+    loadNotes(notesFilter);
+  } else {
+    const st = document.getElementById('note-status');
+    st.textContent = '● Save failed';
+    st.style.color = 'var(--red)';
+    st.style.display = 'inline';
+  }
+}
+
+async function deleteNote() {
+  if (!currentNote) return;
+  if (!confirm('Delete "' + currentNote + '"? This cannot be undone.')) return;
+  const r = await authFetch('/vault/delete', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({path: currentNote})
+  });
+  if (r && r.ok) {
+    currentNote = null;
+    noteDirty = false;
+    document.getElementById('note-path').value = '';
+    document.getElementById('note-editor').value = '';
+    document.getElementById('btn-save').disabled = true;
+    document.getElementById('btn-delete').disabled = true;
+    document.getElementById('note-status').style.display = 'none';
+    allNotesFiles = []; // clear cache so Recent view refreshes
+    loadNotes(notesFilter);
+  }
+}
+
+function newNote() {
+  if (noteDirty && !confirm('Discard unsaved changes?')) return;
+  const name = prompt('Note filename (without .md):');
+  if (!name) return;
+  const folder = notesFilter === 'all' ? 'context' : notesFilter;
+  const path = folder + '/' + name.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '-').toLowerCase() + '.md';
+  currentNote = path;
+  noteDirty = false;
+  document.getElementById('note-path').value = path;
+  document.getElementById('note-editor').value = '# ' + name + '\n\n';
+  document.getElementById('btn-save').disabled = false;
+  document.getElementById('btn-delete').disabled = false;
+  document.getElementById('note-status').style.display = 'none';
+  document.getElementById('note-editor').focus();
+  onNoteChange();
+}
+
+function switchTab(tab) {
+  const editor = document.getElementById('note-editor');
+  const preview = document.getElementById('note-preview');
+  const tabEdit = document.getElementById('tab-edit');
+  const tabPreview = document.getElementById('tab-preview');
+  if (tab === 'edit') {
+    editor.style.display = 'block';
+    preview.style.display = 'none';
+    tabEdit.classList.add('active');
+    tabPreview.classList.remove('active');
+  } else {
+    editor.style.display = 'none';
+    preview.style.display = 'block';
+    tabEdit.classList.remove('active');
+    tabPreview.classList.add('active');
+    // Simple markdown render
+    preview.innerHTML = renderMarkdown(editor.value);
+  }
+}
+
+function renderMarkdown(md) {
+  if (!md) return '<span style="color:var(--text-dim)">Nothing to preview</span>';
+  let h = md
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/^### (.+)$/gm,'<h3>$1</h3>')
+    .replace(/^## (.+)$/gm,'<h2>$1</h2>')
+    .replace(/^# (.+)$/gm,'<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g,'<em>$1</em>')
+    .replace(/`([^`]+)`/g,'<code>$1</code>')
+    .replace(/^- (.+)$/gm,'<li>$1</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g,'<ul>$&</ul>')
+    .replace(/^> (.+)$/gm,'<blockquote>$1</blockquote>')
+    .replace(/---/g,'<hr>')
+    .replace(/\n\n/g,'</p><p>')
+    .replace(/\n/g,'<br>');
+  h = '<p>' + h + '</p>';
+  h = h.replace(/<p>(<h[123]>)/g,'$1').replace(/(<\/h[123]>)<\/p>/g,'$1');
+  h = h.replace(/<p>(<ul>)/g,'$1').replace(/(<\/ul>)<\/p>/g,'$1');
+  h = h.replace(/<p>(<blockquote>)/g,'$1').replace(/(<\/blockquote>)<\/p>/g,'$1');
+  h = h.replace(/<p>(<hr>)<\/p>/g,'$1');
+  h = h.replace(/<p><\/p>/g,'');
+  return h;
+}
+
+function filterNotes(folder, el) {
+  document.querySelectorAll('#notes-folders .filter-btn').forEach(b=>b.classList.remove('active'));
+  if (el) el.classList.add('active');
+  loadNotes(folder);
+}
+
+async function loadGraph() {
+  graphData = await authFetch('/graph');
+  if (!graphData || !graphData.nodes || !graphData.nodes.length) {
+    document.getElementById('graph-info').textContent = 'No vault files yet.';
+    return;
+  }
+  var s = graphData.stats || {};
+  document.getElementById('graph-stat').textContent = (s.node_count || graphData.nodes.length) + ' nodes · ' + (s.link_count || graphData.links.length) + ' links';
+  buildGraphLegend();
+  try { initGraph(); } catch(e) { document.getElementById('graph-info').textContent = 'Error: ' + e.message; }
+}
+
+function buildGraphLegend() {
+  var legend = document.getElementById('graph-legend');
+  if (!graphData || !graphData.groups) { legend.innerHTML = ''; return; }
+  var groups = graphData.groups, linkTypes = [], seen = {};
+  (graphData.links || []).forEach(function(l) { if (!seen[l.type]) { seen[l.type] = true; linkTypes.push(l.type); } });
+  var html = '';
+  var LC = {topic:'#c084fc',folder:'#3b82f6','agent-role':'#fbbf24','agent-output':'#22c55e',wikilink:'#7c5bf5',tag:'#a78bfa','date-adjacent':'#5b9bf5','project-context':'#4ade80',subfolder:'#64748b',tags:'#a78bfa'};
+  for (var i = 0; i < groups.length; i++) { var g = groups[i]; html += '<span class="graph-legend" style="background:' + g.color + ';cursor:pointer" onclick="graphFocusGroup(\'' + g.name + '\')">' + g.name + ' (' + g.count + ')</span>'; }
+  html += '<span style="width:1px;background:var(--border);margin:0 4px"></span>';
+  for (var j = 0; j < linkTypes.length; j++) { var t = linkTypes[j], c = LC[t] || '#666'; html += '<span class="graph-legend" style="background:' + c + ';opacity:0.7;font-size:9px">━ ' + t + '</span>'; }
+  legend.innerHTML = html;
+}
+
+var graphNodes = [], graphLinks = [], graphAnimId = null, graphDragNode = null;
+var graphHighlightNode = null, graphFilterText = '', graphLinkFilterType = 'all';
+var graphCanvas, graphCtx, graphTransform = { x: 0, y: 0, k: 1 };
+var _graphDirty = true, _graphCacheLinks = null, _graphCacheIds = null;
+
+function initGraph() {
+  var container = document.getElementById('graph-container');
+  graphCanvas = document.getElementById('graph-canvas');
+  if (!graphCanvas) return;
+  graphCtx = graphCanvas.getContext('2d');
+  var rect = container.getBoundingClientRect();
+  if (rect.width < 10 || rect.height < 10) { setTimeout(initGraph, 200); return; }
+  graphCanvas.width = rect.width; graphCanvas.height = rect.height;
+  var W = rect.width, H = rect.height, cx = W / 2, cy = H / 2;
+  var groups = {};
+  graphData.nodes.forEach(function(n) { if (!groups[n.group]) groups[n.group] = []; groups[n.group].push(n); });
+  var groupNames = Object.keys(groups);
+  var groupAngle = 2 * Math.PI / Math.max(groupNames.length, 1);
+  var LC = {topic:'#c084fc',folder:'#3b82f6','agent-role':'#fbbf24','agent-output':'#22c55e',wikilink:'#7c5bf5',tag:'#a78bfa','date-adjacent':'#5b9bf5','project-context':'#4ade80',subfolder:'#64748b',tags:'#a78bfa'};
+  var nodeMap = {};
+  graphNodes = graphData.nodes.map(function(d) {
+    var gi = groupNames.indexOf(d.group), gSize = groups[d.group].length, gi2 = groups[d.group].indexOf(d);
+    var angle = gi * groupAngle + (gi2 - gSize / 2) * (Math.min(0.8, gSize * 0.15) / gSize);
+    var r = Math.min(W, H) * 0.25;
+    var n = { id: d.id, label: d.label, group: d.group, color: d.color, path: d.path, size: d.size || 5,
+      x: cx + Math.cos(angle) * r + (Math.random() - 0.5) * 40, y: cy + Math.sin(angle) * r + (Math.random() - 0.5) * 40,
+      vx: 0, vy: 0, connCount: 0, hl: false, dim: false, showLbl: false, radius: d.size || 5 };
+    nodeMap[d.id] = n; return n;
+  });
+  graphData.links.forEach(function(l) { if (nodeMap[l.source]) nodeMap[l.source].connCount++; if (nodeMap[l.target]) nodeMap[l.target].connCount++; });
+  graphLinks = graphData.links.map(function(l) { return { source: nodeMap[l.source] || null, target: nodeMap[l.target] || null, type: l.type, weight: l.weight || 1, color: l.color || LC[l.type] || '#2a2a3a' }; }).filter(function(l) { return l.source && l.target; });
+  runForceSim(W, H);
+  _graphDirty = true;
+  if (graphAnimId) cancelAnimationFrame(graphAnimId);
+  graphLoop();
+  setupGraphEvents(container);
+}
+
+function runForceSim(W, H) {
+  var cx = W / 2, cy = H / 2, alpha = 0.3, n = graphNodes.length;
+  for (var iter = 0; iter < 150; iter++) {
+    alpha *= 0.98;
+    for (var i = 0; i < n; i++) {
+      var ni = graphNodes[i];
+      for (var j = i + 1; j < n; j++) {
+        var nj = graphNodes[j], dx = nj.x - ni.x, dy = nj.y - ni.y, dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        var f = 800 / (dist * dist) * alpha, fx = (dx / dist) * f, fy = (dy / dist) * f;
+        ni.vx -= fx; ni.vy -= fy; nj.vx += fx; nj.vy += fy;
+      }
+    }
+    for (var k = 0; k < graphLinks.length; k++) {
+      var l = graphLinks[k], dx = l.target.x - l.source.x, dy = l.target.y - l.source.y;
+      var dist = Math.sqrt(dx * dx + dy * dy) || 1, ideal = 60 + 30 / (l.weight || 1);
+      var f = (dist - ideal) * 0.006 * alpha, fx = (dx / dist) * f, fy = (dy / dist) * f;
+      l.source.vx += fx; l.source.vy += fy; l.target.vx -= fx; l.target.vy -= fy;
+    }
+    for (var m = 0; m < n; m++) {
+      var nd = graphNodes[m];
+      nd.vx += (cx - nd.x) * 0.002 * alpha; nd.vy += (cy - nd.y) * 0.002 * alpha;
+      nd.vx *= 0.65; nd.vy *= 0.65; nd.x += nd.vx; nd.y += nd.vy;
+      if (nd.x < 15) nd.x = 15; if (nd.x > W - 15) nd.x = W - 15;
+      if (nd.y < 15) nd.y = 15; if (nd.y > H - 15) nd.y = H - 15;
+      nd.vx = 0; nd.vy = 0;
+    }
+  }
+}
+
+function graphLoop() {
+  if (_graphDirty) { renderFrame(); _graphDirty = false; }
+  graphAnimId = requestAnimationFrame(graphLoop);
+}
+
+function invalidateGraph() { _graphDirty = true; _graphCacheLinks = null; _graphCacheIds = null; }
+
+function getActiveLinks() {
+  if (_graphCacheLinks) return _graphCacheLinks;
+  var links = graphLinks;
+  if (graphLinkFilterType !== 'all') links = links.filter(function(l) { return l.type === graphLinkFilterType; });
+  if (graphFilterText) {
+    var q = graphFilterText.toLowerCase(), matching = {};
+    for (var i = 0; i < graphNodes.length; i++) { if (graphNodes[i].label.toLowerCase().indexOf(q) >= 0) matching[graphNodes[i].id] = true; }
+    links = links.filter(function(l) { return matching[l.source.id] || matching[l.target.id]; });
+  }
+  _graphCacheLinks = links;
+  _graphCacheIds = null;
+  return links;
+}
+
+function getActiveIds() {
+  if (_graphCacheIds) return _graphCacheIds;
+  var ids = {}, links = getActiveLinks();
+  for (var i = 0; i < links.length; i++) { ids[links[i].source.id] = true; ids[links[i].target.id] = true; }
+  _graphCacheIds = ids;
+  return ids;
+}
+
+function renderFrame() {
+  var ctx = graphCtx, W = graphCanvas.width, H = graphCanvas.height;
+  if (!ctx) return;
+  ctx.clearRect(0, 0, W, H);
+  var t = graphTransform;
+  ctx.save(); ctx.translate(t.x, t.y); ctx.scale(t.k, t.k);
+  var activeLinks = getActiveLinks();
+  var activeIds = getActiveIds();
+  var hasHl = graphHighlightNode != null;
+  // Links — single pass
+  ctx.lineCap = 'round';
+  for (var i = 0; i < activeLinks.length; i++) {
+    var l = activeLinks[i];
+    var hl = hasHl && (l.source === graphHighlightNode || l.target === graphHighlightNode);
+    ctx.beginPath(); ctx.moveTo(l.source.x, l.source.y); ctx.lineTo(l.target.x, l.target.y);
+    ctx.strokeStyle = l.color || '#64748b'; ctx.lineWidth = hl ? 2.5 : Math.max(0.5, (l.weight || 1) * 1.2);
+    ctx.globalAlpha = hl ? 1.0 : hasHl ? 0.08 : 0.55;
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  // Nodes — single pass, pre-computed properties
+  for (var j = 0; j < graphNodes.length; j++) {
+    var n = graphNodes[j];
+    var hl = n === graphHighlightNode;
+    var conn = hasHl && activeIds[n.id];
+    var match = graphFilterText && n.label.toLowerCase().indexOf(graphFilterText.toLowerCase()) >= 0;
+    var dim = (hasHl && !hl && !conn) || (graphFilterText && !match && Object.keys(activeIds).length > 0 && !activeIds[n.id]);
+    var r = hl ? n.radius * 1.5 : n.radius;
+    if (hl) { ctx.beginPath(); ctx.arc(n.x, n.y, r + 6, 0, Math.PI * 2); ctx.fillStyle = (n.color || '#7c5bf5') + '20'; ctx.fill(); }
+    ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = dim ? '#1a1a2e' : (n.color || '#7c5bf5');
+    ctx.globalAlpha = dim ? 0.2 : 1; ctx.fill();
+    ctx.strokeStyle = hl ? '#fff' : 'rgba(255,255,255,0.1)'; ctx.lineWidth = hl ? 1.5 : 0.5; ctx.stroke(); ctx.globalAlpha = 1;
+    var showLbl = hl || conn || match || (n.connCount >= 3 && !hasHl);
+    if (showLbl) {
+      ctx.font = (hl ? 11 : 9) + 'px -apple-system,sans-serif'; ctx.textAlign = 'center';
+      ctx.fillStyle = dim ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.75)';
+      ctx.globalAlpha = dim ? 0.15 : 1;
+      var lbl = n.label.length > 24 ? n.label.slice(0, 22) + '…' : n.label;
+      ctx.fillText(lbl, n.x, n.y + r + (hl ? 13 : 11)); ctx.globalAlpha = 1;
+    }
+  }
+  ctx.restore();
+}
+
+function setupGraphEvents(container) {
+  var c = container, canvas = document.getElementById('graph-canvas');
+  var tooltip = document.getElementById('graph-tooltip'), panel = document.getElementById('graph-panel');
+  var isPanning = false, panStart = { x: 0, y: 0 };
+  if (c.getAttribute('data-graph-events')) return;
+  c.setAttribute('data-graph-events', '1');
+
+  function hitTest(e) {
+    var rect = c.getBoundingClientRect();
+    var mx = (e.clientX - rect.left - graphTransform.x) / graphTransform.k;
+    var my = (e.clientY - rect.top - graphTransform.y) / graphTransform.k;
+    for (var i = graphNodes.length - 1; i >= 0; i--) { var n = graphNodes[i], dx = mx - n.x, dy = my - n.y; if (dx * dx + dy * dy < (n.radius + 6) * (n.radius + 6)) return n; }
+    return null;
+  }
+
+  c.addEventListener('mousedown', function(e) {
+    var node = hitTest(e);
+    if (node) { graphDragNode = node; c.style.cursor = 'grabbing'; }
+    else { isPanning = true; panStart = { x: e.clientX - graphTransform.x, y: e.clientY - graphTransform.y }; c.style.cursor = 'grabbing'; }
+  });
+  window.addEventListener('mousemove', function(e) {
+    if (graphDragNode) {
+      var rect = c.getBoundingClientRect();
+      graphDragNode.x = (e.clientX - rect.left - graphTransform.x) / graphTransform.k;
+      graphDragNode.y = (e.clientY - rect.top - graphTransform.y) / graphTransform.k;
+      invalidateGraph();
+    } else if (isPanning) {
+      graphTransform.x = e.clientX - panStart.x; graphTransform.y = e.clientY - panStart.y;
+      invalidateGraph();
+    } else {
+      var node = hitTest(e);
+      if (node) { c.style.cursor = 'pointer'; showTooltip(e, node); graphHighlightNode = node; invalidateGraph(); }
+      else { if (graphHighlightNode) { graphHighlightNode = null; invalidateGraph(); } c.style.cursor = 'grab'; tooltip.style.display = 'none'; }
+    }
+  });
+  window.addEventListener('mouseup', function() { graphDragNode = null; isPanning = false; c.style.cursor = 'grab'; });
+  canvas.addEventListener('dblclick', function(e) { var node = hitTest(e); if (node) showPanel(node); });
+  c.addEventListener('wheel', function(e) {
+    e.preventDefault();
+    var delta = e.deltaY > 0 ? 0.92 : 1.08, rect = c.getBoundingClientRect();
+    var mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    graphTransform.x = mx - (mx - graphTransform.x) * delta;
+    graphTransform.y = my - (my - graphTransform.y) * delta;
+    graphTransform.k = Math.max(0.3, Math.min(3, graphTransform.k * delta));
+    invalidateGraph();
+  }, { passive: false });
+
+  function showTooltip(e, node) {
+    var r = c.getBoundingClientRect();
+    tooltip.style.display = 'block'; tooltip.style.left = (e.clientX - r.left + 14) + 'px'; tooltip.style.top = (e.clientY - r.top - 10) + 'px';
+    var conns = graphLinks.filter(function(l) { return l.source === node || l.target === node; });
+    var types = {}; conns.forEach(function(l) { types[l.type] = (types[l.type] || 0) + 1; });
+    var ts = Object.keys(types).map(function(t) { return t + ': ' + types[t]; }).join(', ');
+    tooltip.innerHTML = '<strong>' + node.label + '</strong><br><span style="color:var(--text-dim)">' + (node.path || '') + '</span><br><span style="color:var(--text-dim)">' + node.group + ' · ' + conns.length + ' links</span><br><span style="font-size:10px;color:var(--text-dim)">' + ts + '</span>';
+  }
+
+  function showPanel(node) {
+    var conns = graphLinks.filter(function(l) { return l.source === node || l.target === node; });
+    var neighbors = {};
+    conns.forEach(function(l) { var o = l.source === node ? l.target : l.source; if (!neighbors[o.id]) neighbors[o.id] = { node: o, count: 0 }; neighbors[o.id].count++; });
+    var html = '<div style="font-weight:600;font-size:12px;margin-bottom:3px">' + node.label + '</div>';
+    html += '<div style="font-size:10px;color:var(--text-dim);margin-bottom:6px">' + (node.path || '') + ' · ' + node.group + '</div>';
+    html += '<div style="font-size:10px;color:var(--text-dim);margin-bottom:8px">' + conns.length + ' connections</div>';
+    var types = {}; conns.forEach(function(l) { types[l.type] = (types[l.type] || 0) + 1; });
+    html += '<div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:8px">';
+    var LC2 = {topic:'#c084fc',folder:'#3b82f6','agent-role':'#fbbf24','agent-output':'#22c55e',wikilink:'#7c5bf5',tag:'#a78bfa','date-adjacent':'#5b9bf5'};
+    Object.keys(types).forEach(function(t) { var c2 = LC2[t] || '#666'; html += '<span style="font-size:9px;padding:2px 5px;border-radius:3px;background:' + c2 + '25;color:' + c2 + '">' + t + ' (' + types[t] + ')</span>'; });
+    html += '</div><div style="font-size:10px;font-weight:600;margin-bottom:4px;color:var(--text-dim)">NEIGHBORS</div>';
+    var sorted = Object.keys(neighbors).map(function(id) { return neighbors[id]; }).sort(function(a, b) { return b.count - a.count; });
+    for (var i = 0; i < Math.min(sorted.length, 15); i++) { var n2 = sorted[i]; html += '<div style="font-size:10px;padding:3px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:5px;cursor:pointer" onclick="graphFocusNode(\'' + n2.node.id + '\')"><span style="width:5px;height:5px;border-radius:50%;background:' + n2.node.color + ';flex-shrink:0"></span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + n2.node.label + '</span><span style="color:var(--text-dim)">' + n2.count + '</span></div>'; }
+    html += '<div style="margin-top:6px;font-size:9px;color:var(--text-dim);text-align:center">Scroll=zoom · Drag=pan · Dblclick=info</div>';
+    panel.innerHTML = html; panel.style.display = 'block';
+  }
+}
+
+function graphFilter(text) { graphFilterText = text; invalidateGraph(); if (!text && !graphHighlightNode) document.getElementById('graph-panel').style.display = 'none'; }
+function graphSetLinkFilter(type) { graphLinkFilterType = type; invalidateGraph(); }
+function graphFocusNode(id) { var node = graphNodes.filter(function(n) { return n.id === id; })[0]; if (!node) return; graphHighlightNode = node; graphTransform.x = graphCanvas.width / 2 - node.x * graphTransform.k; graphTransform.y = graphCanvas.height / 2 - node.y * graphTransform.k; invalidateGraph(); }
+function graphFocusGroup(name) { var gn = graphNodes.filter(function(n) { return n.group === name; }); if (!gn.length) return; var ax = 0, ay = 0; gn.forEach(function(n) { ax += n.x; ay += n.y; }); graphTransform.x = graphCanvas.width / 2 - (ax / gn.length) * graphTransform.k; graphTransform.y = graphCanvas.height / 2 - (ay / gn.length) * graphTransform.k; graphTransform.k = 1.5; invalidateGraph(); }
+function graphRebuild(btn) { if (btn) { btn.textContent = '⟳ ...'; btn.disabled = true; } authFetch('/graph/rebuild', { method: 'POST' }).then(function(r) { if (r && r.ok) loadGraph(); }).catch(function(e) { console.error(e); }).finally(function() { if (btn) { btn.textContent = '↻ Rebuild'; btn.disabled = false; } }); }
+
+if (window.ResizeObserver) { var gro = new ResizeObserver(function() { if (graphData && graphCanvas) { var rect = document.getElementById('graph-container').getBoundingClientRect(); if (rect.width > 0 && rect.height > 0) { graphCanvas.width = rect.width; graphCanvas.height = rect.height; invalidateGraph(); } } }); gro.observe(document.getElementById('graph-container')); }
+
+// INIT — deferred to after overlay div (see bottom of file)
+
+// ── Welcome Wizard ──
+(function(){
+  let currentStep = 1;
+  function showStep(n) {
+    for (let i = 1; i <= 3; i++) {
+      const el = document.getElementById('welcome-step-' + i);
+      if (el) el.style.display = i === n ? 'block' : 'none';
+    }
+    const dots = document.querySelectorAll('.welcome-dot');
+    dots.forEach(function(d, i) {
+      d.classList.toggle('active', i === n - 1);
+    });
+    currentStep = n;
+  }
+  window.welcomeNext = function(from) { showStep(from + 1); };
+  window.welcomePrev = function(from) { showStep(from - 1); };
+  window.welcomeSkip = function() { localStorage.setItem('moirai_welcome_done', '1'); document.getElementById('welcome-wizard').style.display = 'none'; };
+  window.welcomeFinish = function() { localStorage.setItem('moirai_welcome_done', '1'); document.getElementById('welcome-wizard').style.display = 'none'; go('dashboard'); };
+})();
+// ═══ SETUP WIZARD (first-run system configuration) ═══
+let _setupSys = null;
+let _setupLoaded = false;
+
+function setupVal(id) {
+  const el = document.getElementById(id);
+  return el ? el.value.trim() : '';
+}
+function setupShowStep(n) {
+  for (let i = 1; i <= 3; i++) {
+    const el = document.getElementById('setup-step-' + i);
+    if (el) el.style.display = (i === n) ? 'block' : 'none';
+    const dot = document.getElementById('setup-dot-' + i);
+    if (dot) dot.classList.toggle('active', i === n);
+  }
+  const lbl = document.getElementById('setup-step-label');
+  if (lbl) lbl.textContent = {1: 'Step 1 of 3 · Account', 2: 'Step 2 of 3 · System', 3: 'Done'}[n] || '';
+}
+function setupNext(from) { setupShowStep(from + 1); }
+function setupPrev(from) { setupShowStep(from - 1); }
+
+function setupPrefill() {
+  const s = _setupSys || {};
+  const m = s.model || {};
+  const set = (id, v, def) => { const el = document.getElementById(id); if (el) el.value = (v === undefined || v === null || v === '') ? def : v; };
+  set('setup-org', s.organization_name, 'MoiraiCore');
+  set('setup-ws', s.workspace, 'workspace');
+  set('setup-t1', m.tier1, 'director');
+  set('setup-t2m', m.tier2_model, 'deepseek/deepseek-v4-flash-0731');
+  set('setup-t2u', m.tier2_base_url, 'https://openrouter.ai/api/v1');
+  set('setup-t3', m.tier3_model, 'qwen2.5-coder:14b');
+  const t2p = document.getElementById('setup-t2p');
+  if (t2p) t2p.value = (m.tier2_provider === 'gemini') ? 'gemini' : 'openai';
+  const g = s.google_oauth || {};
+  const cidEl = document.getElementById('setup-google-cid');
+  if (cidEl && g.client_id) cidEl.value = g.client_id;
+}
+
+async function setupRefreshGoogleUI() {
+  try {
+    const r = await fetch(API + '/auth/google/status');
+    const d = await r.json();
+    const configured = !!(d && d.configured);
+    const boxOn = document.getElementById('setup-google-configured');
+    const boxOff = document.getElementById('setup-google-setup');
+    if (boxOn && boxOff) {
+      if (configured) {
+        boxOn.style.display = 'block';
+        boxOn.innerHTML =
+          '<button class="btn" onclick="setupGoogleLogin()" style="width:100%;padding:11px;display:flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--border);background:var(--bg)"><span style="font-size:16px;font-weight:700;color:#4285F4">G</span> Continue with Google</button>' +
+          '<p style="color:var(--text-dim);font-size:11px;margin-top:6px">Google sign-in ready (' + (d.client_id_masked || 'configured') + ')</p>';
+        boxOff.style.display = 'none';
+        document.getElementById('setup-or-divider').style.display = 'flex';
+      } else {
+        boxOn.style.display = 'none';
+        boxOff.style.display = 'block';
+        document.getElementById('setup-or-divider').style.display = 'flex';
+      }
+    }
+  } catch (e) {}
+}
+
+function setupOpen(mode) {
+  _setupMode = mode || 'first';
+  document.getElementById('setup-wizard').style.display = 'flex';
+  if (!_setupLoaded) { setupPrefill(); _setupLoaded = true; }
+  setupRefreshGoogleUI();
+  if (authToken) {
+    // already signed in — skip the account step
+    document.getElementById('setup-step-1').style.display = 'none';
+    document.getElementById('setup-dot-1').style.display = 'none';
+    document.getElementById('setup-step-label').textContent = 'Step 2 of 2 · System';
+    setupShowStep(2);
+  } else {
+    setupShowStep(1);
+  }
+}
+function setupOpenEdit() {
+  setupOpen('edit');
+}
+function setupHide() {
+  document.getElementById('setup-wizard').style.display = 'none';
+  localStorage.setItem('moirai_setup_done', '1');
+}
+
+async function setupCreateAdmin() {
+  const u = setupVal('setup-admin-user');
+  const dn = setupVal('setup-admin-display');
+  const p = document.getElementById('setup-admin-pass').value;
+  const err = document.getElementById('setup-admin-error');
+  err.style.display = 'none';
+  if (!u || !p) { err.textContent = 'Username and password are required.'; err.style.display = 'block'; return; }
+  const result = await authRegister(u, p, dn);
+  if (!result || !result.ok) {
+    err.textContent = (result && result.message) || 'Registration failed';
+    err.style.display = 'block';
+    return;
+  }
+  setupShowStep(2);
+}
+
+async function setupSaveGoogle() {
+  const cid = setupVal('setup-google-cid');
+  const msg = document.getElementById('setup-google-msg');
+  msg.style.display = 'none';
+  if (!cid) { msg.textContent = 'Enter your Google OAuth Client ID to enable Sign in with Google.'; msg.style.display = 'block'; return; }
+  try {
+    const headers = {'Content-Type': 'application/json'};
+    if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+    const r = await fetch(API + '/setup/google', {method: 'POST', headers: headers, body: JSON.stringify({client_id: cid, enabled: true})});
+    const d = await r.json();
+    if (d.ok) { msg.style.color = 'var(--text-dim)'; msg.textContent = 'Saved. "Continue with Google" is now available.'; msg.style.display = 'block'; setupRefreshGoogleUI(); }
+    else { msg.style.color = 'var(--red)'; msg.textContent = d.error || 'Could not save'; msg.style.display = 'block'; }
+  } catch (e) { msg.style.color = 'var(--red)'; msg.textContent = 'Network error'; msg.style.display = 'block'; }
+}
+
+function setupGoogleLogin() {
+  const redirect = window.location.origin + '/api/auth/google/callback';
+  localStorage.setItem('moirai_setup_google', '1');
+  fetch(API + '/auth/google/start?redirect_uri=' + encodeURIComponent(redirect))
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if (d && d.auth_url) window.location.href = d.auth_url; else { const msg=document.getElementById('setup-google-msg'); if(msg){msg.style.color='var(--red)';msg.textContent=(d&&d.error)||'Could not start Google sign-in';msg.style.display='block';} } })
+    .catch(function(){});
+}
+function authGoogleLogin() {
+  const err = document.getElementById('auth-google-error');
+  err.style.display = 'none';
+  fetch(API + '/auth/google/status')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!(d && d.configured)) {
+        err.textContent = 'Google sign-in is not configured yet. Sign in with your password, then enable it in Settings → Setup & SSO.';
+        err.style.display = 'block';
+        return;
+      }
+      const redirect = window.location.origin + '/api/auth/google/callback';
+      return fetch(API + '/auth/google/start?redirect_uri=' + encodeURIComponent(redirect));
+    })
+    .then(function(r){ if (r) return r.json(); })
+    .then(function(d){
+      if (d && d.auth_url) window.location.href = d.auth_url;
+      else if (d) { err.textContent = d.error || 'Could not start Google sign-in'; err.style.display = 'block'; }
+    })
+    .catch(function(){});
+}
+
+async function setupSaveSystem() {
+  const msg = document.getElementById('setup-config-msg');
+  msg.style.display = 'none';
+  const g = document.getElementById('setup-google-cid') ? setupVal('setup-google-cid') : '';
+  const body = {
+    organization_name: setupVal('setup-org'),
+    workspace: setupVal('setup-ws'),
+    model: {
+      tier1: setupVal('setup-t1'),
+      tier2_provider: (document.getElementById('setup-t2p') || {}).value || 'openai',
+      tier2_model: setupVal('setup-t2m'),
+      tier2_base_url: setupVal('setup-t2u'),
+      tier3_model: setupVal('setup-t3')
+    },
+    google_oauth: { enabled: !!g, client_id: g }
+  };
+  try {
+    const r = await authFetch('/setup/complete', {method: 'POST', body: JSON.stringify(body), headers: {'Content-Type': 'application/json'}});
+    // authFetch already returns the parsed JSON body (it calls res.json()
+    // internally), so r is the data object, NOT a Response — do not call r.json().
+    const d = r || {};
+    if (d.ok) { setupShowStep(3); }
+    else { msg.style.color = 'var(--red)'; msg.textContent = d.error || 'Could not save configuration'; msg.style.display = 'block'; }
+  } catch (e) { msg.style.color = 'var(--red)'; msg.textContent = 'Network error'; msg.style.display = 'block'; }
+}
+
+function setupFinish() {
+  localStorage.setItem('moirai_setup_done', '1');
+  document.getElementById('setup-wizard').style.display = 'none';
+  if (!authToken) { authShowLogin(); return; }
+  location.reload();
+}
+function setupSkipNow() {
+  localStorage.setItem('moirai_setup_done', '1');
+  document.getElementById('setup-wizard').style.display = 'none';
+  if (!authToken) authShowLogin();
+}
+
+async function setupCheck() {
+  try {
+    const r = await fetch(API + '/setup/status');
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d && d.system) _setupSys = d.system;
+    const returningFromGoogle = localStorage.getItem('moirai_setup_google');
+    if (returningFromGoogle) {
+      localStorage.removeItem('moirai_setup_google');
+      // If onboarding hasn't finished and we're signed in (Google created the
+      // account), resume the wizard at the system-configuration step.
+      if (!d.onboarded && authToken && !localStorage.getItem('moirai_setup_done')) {
+        setupOpen('first');
+        return;
+      }
+    }
+    // Show the wizard on a fresh instance until the user finishes or skips it.
+    if (d && !d.onboarded && !localStorage.getItem('moirai_setup_done')) {
+      setupOpen('first');
+    }
+  } catch (e) {}
+}
+
+// ═══ PROJECTS ═══
+let _projectCurrent = null;
+let _projectTab = 'goals';
+
+async function loadProjects() {
+  const el = document.getElementById('projects-list');
+  el.innerHTML = '<div class="loading">Loading projects…</div>';
+  try {
+    const d = await authFetch('/projects/list');
+    if (!d || !d.projects || !d.projects.length) {
+      el.innerHTML = '<div class="empty">No projects yet.<br>Click "+ New" to create one.</div>';
+      return;
+    }
+    // Hide internal test/demo projects from the customer Project Space view.
+    // List is sourced from config/dashboard.json (API: /api/dashboard/config)
+    // with a safe fallback if the config is unavailable.
+    const HIDDEN_FALLBACK = ['phase3-demo', 'phase4-demo'];
+    let hidden = HIDDEN_FALLBACK;
+    try {
+      const cfg = await authFetch('/api/dashboard/config');
+      if (cfg && cfg.project_space && Array.isArray(cfg.project_space.hidden_projects)) {
+        hidden = cfg.project_space.hidden_projects;
+      }
+    } catch (e) { /* use fallback */ }
+    const HIDDEN_PROJECTS = new Set(hidden);
+    const visible = d.projects.filter(function(p) {
+      return !HIDDEN_PROJECTS.has(p.name);
+    });
+    if (!visible.length) {
+      el.innerHTML = '<div class="empty">No projects yet.<br>Click "+ New" to create one.</div>';
+      return;
+    }
+    el.innerHTML = visible.map(function(p) {
+      const sc = {draft:'#888',active:'#4ade80',paused:'#fbbf24',completed:'#22d3ee',archived:'#64748b'};
+      const c = sc[p.status]||'#888';
+      const dt = p.created_at ? new Date(p.created_at).toLocaleDateString('en-AU') : '—';
+      const goals = (p.os_state && p.os_state.goals) ? p.os_state.goals.length : 0;
+      return '<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;cursor:pointer" onclick="projectOpen(\'' + p.name + '\')">' +
+        '<span style="font-size:20px">📁</span>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-size:13px;font-weight:600">' + p.name + '</div>' +
+          '<div style="font-size:10px;color:var(--text-dim);margin-top:2px">' + (p.description || 'No description') + '</div>' +
+          '<div style="display:flex;gap:12px;margin-top:4px;font-size:10px;color:var(--text-dim)">' +
+            '<span style="background:' + c + '20;color:' + c + ';padding:1px 8px;border-radius:10px;font-weight:600">' + p.status + '</span>' +
+            '<span>' + p.category + '</span>' +
+            '<span>🎯 ' + goals + '</span>' +
+            '<span>' + dt + '</span>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  } catch(e) {
+    el.innerHTML = '<div class="empty" style="color:var(--red)">Error: ' + e.message + '</div>';
+  }
+}
+
+async function projectCreate() {
+  const name = (document.getElementById('project-new-name').value || '').trim();
+  const category = document.getElementById('project-new-category').value;
+  const template = document.getElementById('project-new-template').value;
+  if (!name) { document.getElementById('project-new-name').focus(); return; }
+  try {
+    const d = await authFetch('/projects/create', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name:name, description:'', category:category, template:template}),
+    });
+    if (d && d.ok) { document.getElementById('project-new-name').value=''; loadProjects(); }
+    else { alert('Failed: ' + (d&&d.error||'Unknown error')); }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function projectOpen(name) {
+  _projectCurrent = name;
+  _projectTab = 'goals';
+  // Show detail, hide list
+  document.getElementById('projects-list').style.display = 'none';
+  document.getElementById('project-detail').style.display = 'flex';
+  document.getElementById('project-back-btn').style.display = 'inline-block';
+  document.getElementById('project-create-row').style.display = 'none';
+  document.getElementById('projects-heading').textContent = '📁 ' + name;
+  // Load project manifest
+  try {
+    const d = await authFetch('/projects/list');
+    const proj = d && d.projects ? d.projects.find(function(p){return p.name===name}) : null;
+    if (proj) {
+      document.getElementById('pd-name').textContent = proj.name;
+      document.getElementById('pd-desc').textContent = proj.description || proj.category || '';
+      document.getElementById('pd-status').value = proj.status;
+      const sc = {draft:'#888',active:'#4ade80',paused:'#fbbf24',completed:'#22d3ee',archived:'#64748b'};
+      const b = document.getElementById('pd-status-badge');
+      b.textContent = proj.status;
+      b.style.background = (sc[proj.status]||'#888') + '20';
+      b.style.color = sc[proj.status]||'#888';
+    }
+  } catch(e) {}
+  projectTab('goals');
+}
+
+function projectList() {
+  _projectCurrent = null;
+  document.getElementById('projects-list').style.display = 'flex';
+  document.getElementById('project-detail').style.display = 'none';
+  document.getElementById('project-back-btn').style.display = 'none';
+  document.getElementById('project-create-row').style.display = 'flex';
+  document.getElementById('projects-heading').textContent = '📁 Projects';
+  loadProjects();
+}
+
+async function projectTab(tab) {
+  _projectTab = tab;
+  // Update tab styles
+  ['goals','tasks','decisions','files','api','chat'].forEach(function(t) {
+    const btn = document.getElementById('pd-tab-' + t);
+    if (btn) { btn.style.background = t===tab ? 'rgba(124,91,245,0.15)' : ''; btn.style.color = t===tab ? 'var(--accent)' : ''; }
+  });
+  // Update quick add placeholder
+  const input = document.getElementById('pd-quick-input');
+  const qa = document.getElementById('pd-quick-add');
+  if (tab==='goals') { input.placeholder='Add goal...'; qa.style.display='flex'; }
+  else if (tab==='tasks') { input.placeholder='Add task...'; qa.style.display='flex'; }
+  else if (tab==='decisions') { input.placeholder='Log decision...'; qa.style.display='flex'; }
+  else if (tab==='chat') { input.placeholder='Message @agent or type…'; qa.style.display='flex'; document.getElementById('pd-quick-btn').textContent='Send'; }
+  else { qa.style.display='none'; }
+  // Load content
+  const el = document.getElementById('pd-content');
+  el.innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    if (tab==='goals') {
+      const d = await authFetch('/projects/' + encodeURIComponent(_projectCurrent) + '/goals');
+      const goals = d&&d.goals ? d.goals : [];
+      if (!goals.length) { el.innerHTML = '<div class="empty">No goals yet.</div>'; return; }
+      el.innerHTML = goals.map(function(g) {
+        return '<div style="padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;gap:10px">' +
+          '<span style="color:var(--accent);font-size:14px">🎯</span>' +
+          '<div style="flex:1"><div style="font-size:12px;font-weight:600">' + g.text + '</div>' +
+          '<div style="font-size:10px;color:var(--text-dim);margin-top:2px">' + g.agent + ' · ' + g.status + ' · ' + (g.id||'') + '</div></div></div>';
+      }).join('');
+    } else if (tab==='tasks') {
+      const d = await authFetch('/projects/' + encodeURIComponent(_projectCurrent) + '/tasks');
+      const tasks = d&&d.tasks ? d.tasks : [];
+      if (!tasks.length) { el.innerHTML = '<div class="empty">No tasks yet.</div>'; return; }
+      el.innerHTML = tasks.map(function(t) {
+        return '<div style="padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;gap:10px">' +
+          '<span style="color:var(--green);font-size:14px">⚡</span>' +
+          '<div style="flex:1"><div style="font-size:12px;font-weight:600">' + t.text + '</div>' +
+          '<div style="font-size:10px;color:var(--text-dim);margin-top:2px">' + t.status + '</div></div></div>';
+      }).join('');
+    } else if (tab==='decisions') {
+      const d = await authFetch('/projects/' + encodeURIComponent(_projectCurrent) + '/state');
+      const decs = d&&d.state&&d.state.decisions ? d.state.decisions : [];
+      if (!decs.length) { el.innerHTML = '<div class="empty">No decisions logged.</div>'; return; }
+      el.innerHTML = decs.map(function(dc) {
+        return '<div style="padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px">' +
+          '<div style="font-size:12px;font-weight:600">📐 ' + dc.decision + '</div>' +
+          (dc.rationale ? '<div style="font-size:10px;color:var(--text-dim);margin-top:4px">' + dc.rationale + '</div>' : '') +
+          '</div>';
+      }).join('');
+    } else if (tab==='files') {
+      const d = await authFetch('/projects/' + encodeURIComponent(_projectCurrent) + '/files');
+      const files = d&&d.files ? d.files : [];
+      if (!files.length) { el.innerHTML = '<div class="empty">No files yet.</div>'; return; }
+      el.innerHTML = '<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">' + files.length + ' files</div>' +
+        files.map(function(f) {
+          const sz = f.size < 1024 ? f.size + 'B' : (f.size/1024).toFixed(1) + 'KB';
+          return '<div style="padding:6px 12px;display:flex;justify-content:space-between;font-size:11px;border-bottom:1px solid var(--border)">' +
+            '<span style="color:var(--accent)">' + f.path + '</span><span style="color:var(--text-dim)">' + sz + '</span></div>';
+        }).join('');
+    } else if (tab==='api') {
+      const d = await authFetch('/projects/list');
+      const proj = d&&d.projects ? d.projects.find(function(p){return p.name===_projectCurrent}) : null;
+      const key = proj ? proj.api_key : '—';
+      el.innerHTML = '<div style="display:flex;flex-direction:column;gap:12px">' +
+        '<div style="padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:8px">' +
+          '<div style="font-size:12px;font-weight:600;margin-bottom:8px">Project API Key</div>' +
+          '<div style="display:flex;gap:8px;align-items:center">' +
+            '<code style="flex:1;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--accent);overflow-x:auto;white-space:nowrap" id="pd-api-key">' + key + '</code>' +
+            '<button class="btn" onclick="navigator.clipboard.writeText(document.getElementById(\'pd-api-key\').textContent);this.textContent=\'Copied!\'" style="font-size:10px;padding:4px 10px;white-space:nowrap">Copy</button>' +
+          '</div>' +
+        '</div>' +
+        '<div style="padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:8px">' +
+          '<div style="font-size:12px;font-weight:600;margin-bottom:8px">API Endpoints</div>' +
+          '<div style="font-size:11px;color:var(--text-dim);line-height:1.8">' +
+            '<div><code style="color:var(--green)">GET</code> /api/projects/' + _projectCurrent + '/state</div>' +
+            '<div><code style="color:var(--green)">GET</code> /api/projects/' + _projectCurrent + '/goals</div>' +
+            '<div><code style="color:var(--green)">GET</code> /api/projects/' + _projectCurrent + '/tasks</div>' +
+            '<div><code style="color:var(--green)">GET</code> /api/projects/' + _projectCurrent + '/files</div>' +
+            '<div><code style="color:var(--yellow)">POST</code> /api/projects/' + _projectCurrent + '/goals</div>' +
+            '<div><code style="color:var(--yellow)">POST</code> /api/projects/' + _projectCurrent + '/tasks</div>' +
+            '<div><code style="color:var(--yellow)">POST</code> /api/projects/' + _projectCurrent + '/decisions</div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:8px">' +
+          '<div style="font-size:12px;font-weight:600;margin-bottom:8px">MoiraiCore Client</div>' +
+          '<div style="font-size:11px;color:var(--text-dim);line-height:1.6">Use the <code style="color:var(--accent)">agent_client.py</code> in your project\'s <code>orchestration/</code> directory to communicate with MoiraiCore as a downstream API.</div>' +
+        '</div>' +
+      '</div>';
+    } else if (tab==='chat') {
+      // Slack-like Team Workspace — left: agent roster, right: live chat thread
+      const d = await authFetch('/projects/' + encodeURIComponent(_projectCurrent) + '/chat');
+      const msgs = d&&d.messages ? d.messages : [];
+      el.innerHTML =
+        '<div style="display:flex;gap:12px;height:440px;overflow:hidden">' +
+          '<div id="pd-team" style="width:238px;min-width:200px;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px"></div>' +
+          '<div style="flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--surface);border:1px solid var(--border);border-radius:8px">' +
+            '<div id="pd-chat-msgs" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px"></div>' +
+          '</div>' +
+        '</div>';
+      _renderChatMessages(msgs);
+      _loadProjectTeam();
+      _projectChatPollStart();
+    }
+  } catch(e) { el.innerHTML = '<div style="color:var(--red)">Error: ' + e.message + '</div>'; }
+}
+
+async function projectQuickAdd() {
+  const input = document.getElementById('pd-quick-input');
+  const text = (input.value||'').trim();
+  if (!text || !_projectCurrent) return;
+  input.value = '';
+
+  // Chat tab — send message instead of creating a goal/task/decision
+  if (_projectTab === 'chat') {
+    try {
+      // Immediately show the user message in the chat
+      const msgsEl = document.getElementById('pd-chat-msgs');
+      let typing = null;
+      if (msgsEl) {
+        // Remove empty state if present
+        const emptyEl = msgsEl.parentElement.querySelector('.empty');
+        if (emptyEl) emptyEl.style.display = 'none';
+        msgsEl.appendChild(_chatBubble({role:'user', content:text, agent_name:'user', timestamp:new Date().toISOString(), type:'message'}));
+        msgsEl.scrollTop = msgsEl.scrollHeight;
+        // Show an animated "still working" indicator
+        if (!document.getElementById('pd-chat-typing-style')) {
+          const st = document.createElement('style');
+          st.id = 'pd-chat-typing-style';
+          st.textContent = [
+            '#pd-chat-typing{display:flex;align-items:center;gap:6px;padding:8px 16px;font-size:12px;color:var(--text-dim)}',
+            '#pd-chat-typing .jl-spinner{width:12px;height:12px;border:2px solid var(--border,#3a3a4a);',
+            '  border-top-color:var(--green,#4ade80);border-radius:50%;display:inline-block;',
+            '  animation:jl-spin .8s linear infinite;flex:none}',
+            '#pd-chat-typing .jl-dot{width:5px;height:5px;border-radius:50%;background:var(--green,#4ade80);',
+            '  display:inline-block;margin:0 1px;animation:jl-bounce 1.2s infinite ease-in-out}',
+            '#pd-chat-typing .jl-dot:nth-child(2){animation-delay:.15s}',
+            '#pd-chat-typing .jl-dot:nth-child(3){animation-delay:.3s}',
+            '#pd-chat-typing .jl-tag{color:var(--green,#4ade80);font-weight:600}',
+            '#pd-chat-typing .jl-timer{font-size:11px;color:var(--text-dim)}'
+          ].join('\n');
+          document.head.appendChild(st);
+        }
+        typing = document.createElement('div');
+        typing.id = 'pd-chat-typing';
+        typing.innerHTML =
+          '<span class="jl-spinner"></span> ' +
+          '<span class="jl-tag">Jarvis is working</span> ' +
+          '<span class="jl-dot"></span><span class="jl-dot"></span><span class="jl-dot"></span> ' +
+          '<span class="jl-timer">0s</span>';
+        // live elapsed timer; cleared when the element is removed
+        const _t0 = Date.now();
+        (function tick() {
+          if (!document.getElementById('pd-chat-typing')) return;
+          const t = document.getElementById('pd-chat-typing').querySelector('.jl-timer');
+          if (t) t.textContent = Math.floor((Date.now() - _t0) / 1000) + 's';
+          setTimeout(tick, 1000);
+        })();
+        msgsEl.appendChild(typing);
+        msgsEl.scrollTop = msgsEl.scrollHeight;
+      }
+      // Send to backend
+      const d = await authFetch('/projects/' + encodeURIComponent(_projectCurrent) + '/chat', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({message:text, personality:'professional'}),
+      });
+      // Remove typing indicator
+      if (typing) typing.remove();
+      // Re-render all messages to get the full conversation
+      await _projectChatRefresh();
+    } catch(e) {
+      const typing = document.getElementById('pd-chat-typing');
+      if (typing) typing.remove();
+      const msgsEl = document.getElementById('pd-chat-msgs');
+      if (msgsEl) {
+        const err = document.createElement('div');
+        err.style.cssText = 'text-align:center;font-size:10px;color:var(--red);padding:4px';
+        err.textContent = 'Error: ' + e.message;
+        msgsEl.appendChild(err);
+      }
+    }
+    return;
+  }
+
+  try {
+    let endpoint = '/api/projects/' + encodeURIComponent(_projectCurrent) + '/' + _projectTab;
+    let body = {};
+    if (_projectTab==='goals') body = {text:text, agent:'hermes'};
+    else if (_projectTab==='tasks') body = {text:text};
+    else if (_projectTab==='decisions') { endpoint = '/api/projects/' + encodeURIComponent(_projectCurrent) + '/decisions'; body = {decision:text}; }
+    const d = await authFetch(endpoint, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if (d&&d.ok) projectTab(_projectTab);
+    else alert('Failed: '+(d&&d.error||'Unknown'));
+  } catch(e) { alert('Error: '+e.message); }
+}
+
+async function projectSetStatus(status) {
+  if (!_projectCurrent) return;
+  try {
+    await authFetch('/projects/' + encodeURIComponent(_projectCurrent) + '/update', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({status:status}),
+    });
+    const sc = {draft:'#888',active:'#4ade80',paused:'#fbbf24',completed:'#22d3ee',archived:'#64748b'};
+    const b = document.getElementById('pd-status-badge');
+    b.textContent = status;
+    b.style.background = (sc[status]||'#888') + '20';
+    b.style.color = sc[status]||'#888';
+  } catch(e) {}
+}
+
+async function projectDelete() {
+  if (!_projectCurrent) return;
+  if (!confirm('Delete project "' + _projectCurrent + '"? This cannot be undone.')) return;
+  try {
+    const d = await authFetch('/projects/' + encodeURIComponent(_projectCurrent) + '/delete', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: '{}',
+    });
+    if (d && d.ok) { projectList(); }
+    else { alert('Failed: '+(d&&d.error||'Unknown')); }
+  } catch(e) { alert('Error: '+e.message); }
+}
+
+// ═══ PROJECT CHAT HELPERS ═══
+let _projectChatSSE = null;
+
+function _projectChatPollStop() {
+  if (_projectChatSSE) { _projectChatSSE.close(); _projectChatSSE = null; }
+}
+
+function _projectChatPollStart() {
+  _projectChatPollStop();
+  // Connect to SSE stream for real-time updates
+  // EventSource can't set custom headers, so we pass the token as a query param
+  const token = authToken || localStorage.getItem('moirai_token');
+  const url = API + '/projects/' + encodeURIComponent(_projectCurrent) + '/chat/stream?token=' + encodeURIComponent(token || '');
+  _projectChatSSE = new EventSource(url);
+  _projectChatSSE.onmessage = function(e) {
+    try {
+      const data = JSON.parse(e.data);
+      if (data.type === 'keepalive') return; // Ignore keepalives
+      // Append the new message to the chat
+      const msgsEl = document.getElementById('pd-chat-msgs');
+      if (!msgsEl) return;
+      // Remove empty state if present
+      const emptyEl = msgsEl.parentElement ? msgsEl.parentElement.querySelector('.empty') : null;
+      if (emptyEl) emptyEl.style.display = 'none';
+      const wasAtBottom = msgsEl.scrollTop + msgsEl.clientHeight >= msgsEl.scrollHeight - 40;
+      msgsEl.appendChild(_chatBubble(data));
+      if (wasAtBottom) msgsEl.scrollTop = msgsEl.scrollHeight;
+    } catch(e) { /* silent */ }
+  };
+  _projectChatSSE.onerror = function() {
+    // EventSource will auto-reconnect; no action needed
+  };
+}
+
+async function _projectChatRefresh() {
+  if (!_projectCurrent) return;
+  try {
+    const d = await authFetch('/projects/' + encodeURIComponent(_projectCurrent) + '/chat');
+    const msgs = d&&d.messages ? d.messages : [];
+    const msgsEl = document.getElementById('pd-chat-msgs');
+    if (!msgsEl) return;
+    // Remember scroll position — if at bottom, auto-scroll after refresh
+    const wasAtBottom = msgsEl.scrollTop + msgsEl.clientHeight >= msgsEl.scrollHeight - 40;
+    _renderChatMessages(msgs);
+    if (wasAtBottom) msgsEl.scrollTop = msgsEl.scrollHeight;
+  } catch(e) { /* silent */ }
+}
+
+function _chatBubble(msg) {
+  const div = document.createElement('div');
+  const isUser = msg.role === 'user';
+  const isTranscript = msg.role === 'agent_transcript';
+  const isSystem = msg.role === 'system';
+  const isAssistant = msg.role === 'assistant';
+
+  if (isTranscript) {
+    // Agent transcript — centered, smaller, italic
+    div.style.cssText = 'text-align:center;font-size:10px;color:var(--text-dim);font-style:italic;padding:2px 8px;margin:2px 0';
+    div.textContent = '🤖 ' + msg.agent_name + ': ' + msg.content;
+  } else if (isSystem) {
+    // System event — centered, muted
+    div.style.cssText = 'text-align:center;font-size:10px;color:var(--text-dim);padding:2px 8px;margin:2px 0';
+    div.textContent = '🔔 ' + msg.content;
+  } else {
+    // User or assistant — bubble style
+    const align = isUser ? 'flex-end' : 'flex-start';
+    const bg = isUser ? 'var(--accent)' : 'var(--surface)';
+    const color = isUser ? '#fff' : 'var(--text)';
+    const br = isUser ? '16px 16px 4px 16px' : '16px 16px 16px 4px';
+    const maxWidth = isUser ? '75%' : '85%';
+
+    div.style.cssText = 'display:flex;flex-direction:column;align-items:' + align + ';max-width:' + maxWidth + ';align-self:' + align;
+
+    // Agent name label (for assistant messages)
+    if (isAssistant) {
+      const label = document.createElement('div');
+      label.style.cssText = 'font-size:9px;color:var(--text-dim);margin-bottom:2px;padding-left:4px';
+      const emoji = (msg.metadata && msg.metadata.emoji) ? (msg.metadata.emoji + ' ') : '';
+      label.textContent = emoji + (msg.agent_name || 'Jarvis');
+      div.appendChild(label);
+    }
+
+    // Bubble
+    const bubble = document.createElement('div');
+    bubble.style.cssText = 'padding:8px 14px;background:' + bg + ';color:' + color + ';border-radius:' + br + ';font-size:12px;line-height:1.5;word-wrap:break-word;white-space:pre-wrap';
+    // Convert markdown-style formatting to HTML
+    let content = msg.content
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/`(.+?)`/g, '<code style="background:rgba(0,0,0,0.2);padding:1px 4px;border-radius:3px;font-size:10px">$1</code>')
+      .replace(/\n/g, '<br>');
+    bubble.innerHTML = content;
+    div.appendChild(bubble);
+
+    // Timestamp
+    const ts = document.createElement('div');
+    ts.style.cssText = 'font-size:9px;color:var(--text-dim);margin-top:2px;padding:0 4px';
+    const t = msg.timestamp ? msg.timestamp.substring(11, 19) : '';
+    ts.textContent = t;
+    div.appendChild(ts);
+  }
+
+  return div;
+}
+
+function _renderChatMessages(msgs) {
+  const msgsEl = document.getElementById('pd-chat-msgs');
+  if (!msgsEl) return;
+  msgsEl.innerHTML = '';
+  if (!msgs || !msgs.length) {
+    msgsEl.innerHTML = '<div class="empty" style="text-align:center;padding:40px 20px">💬<br>No messages yet.</div>';
+    return;
+  }
+  msgs.forEach(function(msg) {
+    msgsEl.appendChild(_chatBubble(msg));
+  });
+  msgsEl.scrollTop = msgsEl.scrollHeight;
+}
+
+// ═══ PROJECT TEAM ROSTER (Slack-like "who's working on what") ═══
+async function _loadProjectTeam() {
+  const el = document.getElementById('pd-team');
+  if (!el || !_projectCurrent) return;
+  el.innerHTML = '<div class="loading" style="padding:16px;text-align:center">Loading team…</div>';
+  let d;
+  try {
+    d = await authFetch('/projects/' + encodeURIComponent(_projectCurrent) + '/team');
+  } catch(e) {
+    el.innerHTML = '<div class="empty" style="padding:16px;text-align:center">Team unavailable</div>';
+    return;
+  }
+  const agents = d && d.agents ? d.agents : [];
+  if (!agents.length) {
+    el.innerHTML = '<div class="empty" style="padding:16px;text-align:center">No agents registered.</div>' +
+      '<button class="btn" style="width:100%;font-size:10px;padding:6px;margin-top:8px" onclick="openAgentEditor()">+ Add Agent</button>';
+    return;
+  }
+  let html = '<div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">👥 Team</div>';
+  html += agents.map(function(a) {
+    const dot = a.is_working
+      ? '<span style="color:var(--green);font-size:10px">●</span>'
+      : '<span style="color:var(--text-dim);font-size:10px">○</span>';
+    let sub = '';
+    if (a.current_task) {
+      sub = '<div style="font-size:9px;color:var(--green);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + (a.current_task.title||'') + '">🔧 ' + (a.current_task.title||'') + '</div>';
+    } else if (a.last_activity) {
+      sub = '<div style="font-size:9px;color:var(--text-dim);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + a.last_activity + '</div>';
+    }
+    return '<div onclick="projectMention(&quot;'+a.key+'&quot;)" title="Message @'+a.key+'" style="cursor:pointer;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px">' +
+        '<div style="display:flex;align-items:center;gap:8px">' +
+          '<span style="font-size:16px">' + (a.emoji||'🤖') + '</span>' +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="font-size:11px;font-weight:600;display:flex;align-items:center;gap:6px">' + a.name + ' ' + dot + '</div>' +
+            '<div style="font-size:9px;color:var(--text-dim)">' + (a.role||'') + '</div>' +
+            sub +
+          '</div>' +
+        '</div>' +
+        '<div style="font-size:9px;color:var(--accent);margin-top:4px">@'+a.key+'</div>' +
+      '</div>';
+  }).join('');
+  html += '<div style="margin-top:8px"><button class="btn" style="width:100%;font-size:10px;padding:6px" onclick="openAgentEditor()">+ Add Agent</button></div>';
+  el.innerHTML = html;
+}
+
+function projectMention(key) {
+  const input = document.getElementById('pd-quick-input');
+  if (input) { input.value = '@' + key + ' '; input.focus(); }
+}
+
+function projectChat() {
+  if (!_projectCurrent) return;
+  // Navigate to Jarvis and pre-set the context
+  go('jarvis');
+  const input = document.getElementById('jarvis-input');
+  if (input) input.value = 'I\'m working on the project "' + _projectCurrent + '". ';
+}
+
+// ═══ JARVIS CHAT ═══
+let jarvisSessionId = null;
+let jarvisPersonality = "professional";
+let jarvisLoadTimer = null;
+
+async function loadJarvis() {
+  // Load greeting
+  try {
+    const r = await authFetch('/api/jarvis/greeting?personality=' + jarvisPersonality);
+    if (r && r.greeting) {
+      const welcome = document.getElementById('jarvis-welcome');
+      if (welcome) welcome.innerHTML = r.greeting;
+    }
+  } catch(e) {}
+}
+
+function jarvisSetPersonality(val) {
+  jarvisPersonality = val;
+  loadJarvis();
+}
+
+function jarvisInputKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    jarvisSend();
+  }
+}
+
+async function jarvisSend() {
+  const input = document.getElementById('jarvis-input');
+  const message = (input.value || '').trim();
+  if (!message) return;
+
+  const chat = document.getElementById('jarvis-chat');
+  const sendBtn = document.getElementById('jarvis-send-btn');
+  const welcome = document.getElementById('jarvis-welcome');
+  if (welcome) welcome.style.display = 'none';
+
+  // User message
+  const userDiv = document.createElement('div');
+  userDiv.className = 'msg-row';
+  userDiv.innerHTML = '<div class="msg-avatar user">👤</div><div class="msg-content"><div class="msg-author user">You</div><div class="msg-text user">' + message.replace(/</g,'&lt;').replace(/\n/g,'<br>') + '</div></div>';
+  chat.appendChild(userDiv);
+
+  // Loading — animated "still working" indicator
+  if (!document.getElementById('jarvis-loading-style')) {
+    const st = document.createElement('style');
+    st.id = 'jarvis-loading-style';
+    st.textContent = [
+      '#jarvis-loading .jl-spinner{width:14px;height:14px;border:2px solid var(--border,#3a3a4a);',
+      '  border-top-color:var(--green,#4ade80);border-radius:50%;display:inline-block;',
+      '  animation:jl-spin .8s linear infinite;vertical-align:-3px;flex:none}',
+      '@keyframes jl-spin{to{transform:rotate(360deg)}}',
+      '#jarvis-loading .jl-dot{width:6px;height:6px;border-radius:50%;background:var(--green,#4ade80);',
+      '  display:inline-block;margin:0 2px;animation:jl-bounce 1.2s infinite ease-in-out}',
+      '#jarvis-loading .jl-dot:nth-child(2){animation-delay:.15s}',
+      '#jarvis-loading .jl-dot:nth-child(3){animation-delay:.3s}',
+      '@keyframes jl-bounce{0%,60%,100%{transform:translateY(0);opacity:.35}',  ' 30%{transform:translateY(-4px);opacity:1}}',
+      '#jarvis-loading .jl-timer{font-size:11px;color:var(--text-dim,#888)}',
+      '#jarvis-loading .jl-tag{font-weight:600}'
+    ].join('\n');
+    document.head.appendChild(st);
+  }
+
+  const loadingDiv = document.createElement('div');
+  loadingDiv.id = 'jarvis-loading';
+  loadingDiv.style.cssText = 'background:var(--bg);border:1px solid var(--border);border-radius:8px 8px 8px 0;padding:10px 14px;align-self:flex-start;max-width:80%';
+  loadingDiv.innerHTML =
+    '<span class="jl-spinner"></span> ' +
+    '<span class="jl-tag" style="color:var(--green,#4ade80)">Jarvis is working</span> ' +
+    '<span class="jl-dot"></span><span class="jl-dot"></span><span class="jl-dot"></span> ' +
+    '<span class="jl-timer">0s</span>';
+  chat.appendChild(loadingDiv);
+  const _t0 = Date.now();
+  jarvisLoadTimer = setInterval(() => {
+    const el = document.getElementById('jarvis-loading');
+    if (!el) { clearInterval(jarvisLoadTimer); return; }
+    const t = el.querySelector('.jl-timer');
+    if (t) t.textContent = Math.floor((Date.now() - _t0) / 1000) + 's';
+  }, 1000);
+  chat.scrollTop = chat.scrollHeight;
+
+  input.value = '';
+  if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '⏳'; }
+
+  try {
+    // Client-side watchdog: bound the wait so the "working" indicator can
+    // never spin indefinitely. Generous (5 min) to allow long agentic runs;
+    // the server is now threaded so other requests aren't blocked meanwhile.
+    const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const watchdog = controller ? setTimeout(() => controller.abort(), 300000) : null;
+    const result = await authFetch('/api/jarvis/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      signal: controller ? controller.signal : undefined,
+      body: JSON.stringify({message, session_id: jarvisSessionId, personality: jarvisPersonality}),
+    });
+    if (watchdog) clearTimeout(watchdog);
+
+    loadingDiv.remove();
+    if (jarvisLoadTimer) { clearInterval(jarvisLoadTimer); jarvisLoadTimer = null; }
+
+    if (result && result.session_id) {
+      jarvisSessionId = result.session_id;
+      const label = document.getElementById('jarvis-session-label');
+      if (label) label.textContent = 'Session: ' + jarvisSessionId.slice(0, 12) + '…';
+    }
+
+    const respDiv = document.createElement('div');
+    respDiv.className = 'msg-row';
+    if (result && result.response) {
+      const name = result.agent_name || 'Jarvis';
+      respDiv.innerHTML = '<div class="msg-avatar agent">🧠</div><div class="msg-content"><div class="msg-author agent">' + name + '</div><div class="msg-text agent">' + result.response.replace(/</g,'&lt;').replace(/\n/g,'<br>') + '</div></div>';
+    } else {
+      const errMsg = (result && result.error) || 'No response';
+      respDiv.innerHTML = '<div class="msg-avatar agent">⚠️</div><div class="msg-content"><div class="msg-author agent">Error</div><div class="msg-text agent">' + errMsg + '</div></div>';
+    }
+    chat.appendChild(respDiv);
+  } catch(e) {
+    loadingDiv.remove();
+    if (jarvisLoadTimer) { clearInterval(jarvisLoadTimer); jarvisLoadTimer = null; }
+    const errDiv = document.createElement('div');
+    errDiv.className = 'msg-row';
+    const timedOut = e && e.name === 'AbortError';
+    errDiv.innerHTML = timedOut
+      ? '<div class="msg-avatar agent">⏱</div><div class="msg-content"><div class="msg-author agent">Timeout</div><div class="msg-text agent">Jarvis took longer than 5 minutes to respond. The request was cancelled — please try again.</div></div>'
+      : '<div class="msg-avatar agent">⚠️</div><div class="msg-content"><div class="msg-author agent">Error</div><div class="msg-text agent">' + (e.message || 'request failed') + '</div></div>';
+    chat.appendChild(errDiv);
+  }
+
+  chat.scrollTop = chat.scrollHeight;
+  if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Send'; }
+}
+
+function jarvisNewSession() {
+  jarvisSessionId = null;
+  const label = document.getElementById('jarvis-session-label');
+  if (label) label.textContent = 'Personal AI assistant';
+  jarvisClearChat();
+  loadJarvis();
+}
+
+function jarvisClearChat() {
+  const chat = document.getElementById('jarvis-chat');
+  chat.innerHTML = '<div class="empty" id="jarvis-welcome" style="text-align:center;color:var(--text-dim);margin-top:40px">Start a conversation with Jarvis.<br>Ask anything — it remembers context across sessions.</div>';
+}
+
+// ═══ LIVE ACTIVITY MONITOR ═══
+var liveAutoTimer = null;
+var liveAutoOn = true;
+var LIVE_STAGES = ['queued','running','toolcall','synthesis','verify','done'];
+var LIVE_STAGE_LABELS = {queued:'Queued',running:'Running',toolcall:'Tool calls',synthesis:'Synthesis',verify:'Verify',done:'Done'};
+
+function stageIndex(stage) {
+  if (!stage) return -1;
+  var s = String(stage).toLowerCase();
+  var i = LIVE_STAGES.indexOf(s);
+  if (i >= 0) return i;
+  // tolerate synonyms
+  if (s === 'in_progress' || s === 'active' || s === 'working') return 1;
+  if (s === 'tools' || s === 'executing') return 2;
+  if (s === 'writing' || s === 'building') return 3;
+  if (s === 'checking' || s === 'validation') return 4;
+  if (s === 'complete' || s === 'finished') return 5;
+  return -1;
+}
+
+function fmtElapsed(ts) {
+  if (!ts) return '';
+  try {
+    var d = new Date(ts);
+    var secs = Math.max(0, Math.floor((Date.now() - d.getTime()) / 1000));
+    if (secs < 60) return secs + 's';
+    var m = Math.floor(secs / 60);
+    if (m < 60) return m + 'm ' + (secs % 60) + 's';
+    var h = Math.floor(m / 60);
+    return h + 'h ' + (m % 60) + 'm';
+  } catch (e) { return ''; }
+}
+
+function fmtAgo(ts) {
+  if (!ts) return 'never';
+  var secs = fmtElapsed(ts);
+  return secs ? secs + ' ago' : 'just now';
+}
+
+function evIcon(kind, status) {
+  var s = String(status || '').toLowerCase();
+  if (s === 'failed') return '❌';
+  if (s === 'guard' || s === 'blocked') return '🛑';
+  if (s === 'paused') return '⏸';
+  if (kind === 'goal') return '🎯';
+  if (kind === 'agent') return '🤖';
+  if (kind === 'orchestration') return '🎼';
+  if (kind === 'system') return '⚙️';
+  return '⚡';
+}
+
+function loadLive() {
+  var btn = document.getElementById('live-refresh-btn');
+  if (btn) btn.classList.add('spinning');
+  authFetch('/activity').then(function(d) {
+    if (!d) return;
+    renderLive(d);
+  }).catch(function(e) {
+    var el = document.getElementById('live-feed');
+    if (el) el.innerHTML = '<div class="live-empty"><div class="empty-icon">⚠️</div><div class="empty-text">Could not load live activity.</div></div>';
+  }).finally(function() {
+    if (btn) setTimeout(function(){ btn.classList.remove('spinning'); }, 300);
+  });
+}
+
+function renderLive(d) {
+  var summary = d.summary || {};
+  var running = d.running || [];
+  var events = d.events || [];
+
+  // Pulse + status
+  var pulse = document.getElementById('live-pulse');
+  var age = summary.last_event_age_s;
+  var busy = running.length > 0;
+  if (pulse) {
+    pulse.className = 'live-pulse' + (busy ? ' busy' : (age == null ? ' stale' : (age > 120 ? ' stale' : '')));
+  }
+  var statusEl = document.getElementById('live-status');
+  if (statusEl) {
+    if (busy) { statusEl.textContent = 'ACTIVE'; statusEl.className = 'value accent'; }
+    else if (age == null) { statusEl.textContent = 'IDLE'; statusEl.className = 'value'; }
+    else if (age > 120) { statusEl.textContent = 'QUIET'; statusEl.className = 'value'; }
+    else { statusEl.textContent = 'READY'; statusEl.className = 'value green'; }
+  }
+  setText('live-active', running.length);
+  setText('live-tasks', summary.active_tasks || 0);
+  setText('live-last', fmtAgo(summary.last_event_ts));
+
+  // Running cards
+  var runEl = document.getElementById('live-running');
+  if (runEl) {
+    if (!running.length) {
+      runEl.innerHTML = '<div class="live-empty"><div class="empty-icon">😴</div><div class="empty-text">Nothing running right now.<br>Activity will appear here the moment an agent starts work.</div></div>';
+    } else {
+      runEl.innerHTML = running.map(function(r) {
+        var idx = stageIndex(r.stage);
+        var activeIdx = idx < 0 ? 1 : idx;
+        var failed = String(r.status || '').toLowerCase() === 'failed';
+        var nodes = LIVE_STAGES.map(function(st, i) {
+          var cls = 'stage-node';
+          if (failed && i === activeIdx) cls += ' failed';
+          else if (i < activeIdx) cls += ' done';
+          else if (i === activeIdx) cls += ' current';
+          var line = '<span class="stage-line"></span>';
+          return '<div class="' + cls + '">' + line + '<span class="stage-dot"></span><span class="stage-label">' + (LIVE_STAGE_LABELS[st] || st) + '</span></div>';
+        }).join('');
+        var metaBits = [];
+        if (r.goal_id) metaBits.push('goal ' + String(r.goal_id).slice(0, 14));
+        if (r.task_id) metaBits.push('task ' + String(r.task_id).slice(0, 14));
+        var meta = metaBits.length ? metaBits.join(' · ') : '—';
+        var msg = (r.message || 'Working…').replace(/</g, '&lt;');
+        return '<div class="live-run-card">' +
+          '<div class="run-top">' +
+            '<span class="run-agent">' + (r.agent || 'agent') + '</span>' +
+            '<span class="run-msg">' + msg + '</span>' +
+            '<span class="run-elapsed">' + fmtElapsed(r.ts) + '</span>' +
+          '</div>' +
+          '<div class="run-meta">' + meta + '</div>' +
+          '<div class="stage-track">' + nodes + '</div>' +
+        '</div>';
+      }).join('');
+    }
+  }
+
+  // Event feed
+  var feedEl = document.getElementById('live-feed');
+  if (feedEl) {
+    if (!events.length) {
+      feedEl.innerHTML = '<div class="live-empty"><div class="empty-icon">📭</div><div class="empty-text">No activity recorded yet.</div></div>';
+    } else {
+      feedEl.innerHTML = events.slice().reverse().map(function(ev) {
+        var kind = ev.kind || 'task';
+        var status = ev.status || '';
+        var icon = evIcon(kind, status);
+        var msg = (ev.message || '').replace(/</g, ' &lt;');
+        var tags = [];
+        if (ev.agent) tags.push(ev.agent);
+        if (ev.stage) tags.push(ev.stage);
+        var tagHtml = tags.map(function(t){ return '<span class="ev-tag">' + t + '</span>'; }).join('');
+        return '<div class="live-event kind-' + kind + (String(status).toLowerCase() === 'failed' ? ' kind-failed' : '') + '">' +
+          '<span class="ev-icon">' + icon + '</span>' +
+          '<div class="ev-body">' +
+            '<div class="ev-msg">' + msg + '</div>' +
+            '<div class="ev-meta"><span class="ev-time">' + fmtAgo(ev.ts) + '</span>' + tagHtml + '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+  }
+
+  // Sidebar badge
+  var badge = document.getElementById('nav-live-count');
+  if (badge) {
+    if (running.length > 0) { badge.style.display = 'inline-block'; badge.textContent = running.length; }
+    else { badge.style.display = 'none'; }
+  }
+}
+
+function setText(id, val) {
+  var el = document.getElementById(id);
+  if (el) el.textContent = (val == null ? '—' : val);
+}
+
+function toggleLiveAuto() {
+  liveAutoOn = !liveAutoOn;
+  var btn = document.getElementById('live-auto-btn');
+  var dot = document.getElementById('live-autodot');
+  if (liveAutoOn) {
+    if (btn) { btn.textContent = '⏸ Auto'; btn.classList.add('primary'); }
+    if (dot) dot.classList.remove('off');
+    startLiveAuto();
+    loadLive();
+  } else {
+    if (btn) { btn.textContent = '▶ Auto'; btn.classList.remove('primary'); }
+    if (dot) dot.classList.add('off');
+    stopLiveAuto();
+  }
+}
+
+function startLiveAuto() {
+  stopLiveAuto();
+  liveAutoTimer = setInterval(function() {
+    // Only poll while the Live view is visible (cheap check)
+    var view = document.getElementById('view-live');
+    if (view && view.classList.contains('active')) loadLive();
+    else stopLiveAuto();
+  }, 4000);
+}
+
+// ── COMMAND PALETTE (Cmd/Ctrl+K) ──
+const CMD_PALETTE_VIEW_CMDS = [
+  { id:'go-dashboard', label:'Go to Home', icon:'🏠', group:'Navigate', view:'dashboard' },
+  { id:'go-jarvis', label:'Go to Jarvis', icon:'🧠', group:'Navigate', view:'jarvis' },
+  { id:'go-goals', label:'Go to Goals', icon:'🎯', group:'Navigate', view:'goals' },
+  { id:'go-agents', label:'Go to Agents', icon:'🤖', group:'Navigate', view:'agents' },
+  { id:'go-projects', label:'Go to Projects', icon:'📁', group:'Navigate', view:'projects' },
+  { id:'go-channels', label:'Go to Agent Channels', icon:'📡', group:'Navigate', view:'channels' },
+  { id:'go-orchestrate', label:'Go to Orchestrate', icon:'⚡', group:'Navigate', view:'orchestrate' },
+  { id:'go-outputs', label:'Go to Outputs', icon:'📤', group:'Navigate', view:'outputs' },
+  { id:'go-reports', label:'Go to Reports', icon:'📊', group:'Navigate', view:'reports' },
+  { id:'go-hermes', label:'Go to Hermes Bridge', icon:'🦉', group:'Navigate', view:'hermes' },
+  { id:'go-graph', label:'Go to Knowledge Graph', icon:'🕸️', group:'Navigate', view:'graph' },
+  { id:'go-notes', label:'Go to Notes', icon:'📝', group:'Navigate', view:'notes' },
+  { id:'go-kanban', label:'Go to Kanban', icon:'🗂️', group:'Navigate', view:'kanban' },
+  { id:'go-tasks', label:'Go to Tasks', icon:'✅', group:'Navigate', view:'tasks' },
+  { id:'go-audit', label:'Go to Audit Trail', icon:'🛡', group:'Navigate', view:'audit' },
+  { id:'go-economics', label:'Go to Economics', icon:'💰', group:'Navigate', view:'economics' },
+  { id:'go-systemlogs', label:'Go to System Logs', icon:'📋', group:'Navigate', view:'systemlogs' },
+  { id:'go-settings', label:'Go to Settings', icon:'⚙️', group:'Navigate', view:'settings' },
+];
+const CMD_PALETTE_ACTION_CMDS = [
+  { id:'act-register-agent', label:'Register New Agent', icon:'➕', group:'Action', run:() => openAgentEditor() },
+  { id:'act-new-note', label:'New Note', icon:'📝', group:'Action', run:() => newNote() },
+  { id:'act-new-project', label:'New Project (jump to Projects)', icon:'📁', group:'Action', view:'projects' },
+  { id:'act-new-goal', label:'New Goal (jump to Goals)', icon:'🎯', group:'Action', view:'goals' },
+  { id:'act-reload', label:'Reload Current View', icon:'🔄', group:'Action', run:() => { const v = document.querySelector('.view.active'); if (v) go(v.id.replace('view-','')); } },
+];
+
+let _cmdMatches = [];
+let _cmdActive = 0;
+
+function _buildPaletteCommands() {
+  const cmds = [...CMD_PALETTE_VIEW_CMDS, ...CMD_PALETTE_ACTION_CMDS];
+  // Dynamic: open each registered agent (from the registry list if present)
+  try {
+    const reg = document.getElementById('agent-registry-list');
+    if (reg) {
+      const cards = reg.querySelectorAll('.agent-card .agent-name');
+      cards.forEach((el) => {
+        const name = el.textContent.trim();
+        const key = (el.closest('.agent-card') && el.closest('.agent-card').getAttribute('onclick') || '')
+          .replace(/showAgent\('([^']+)'\)/, '$1');
+        if (key) cmds.push({ id:'agent-'+key, label:'Open Agent: '+name, icon:'🤖', group:'Agents', run:() => showAgent(key) });
+      });
+    }
+  } catch (e) { /* non-fatal */ }
+  return cmds;
+}
+
+function _fuzzyScore(query, text) {
+  query = query.toLowerCase().trim();
+  text = text.toLowerCase();
+  if (!query) return 1;
+  if (text.includes(query)) return 2 + (text.startsWith(query) ? 1 : 0);
+  let qi = 0, score = 0;
+  for (let i = 0; i < text.length && qi < query.length; i++) {
+    if (text[i] === query[qi]) { score++; qi++; }
+  }
+  return qi === query.length ? score : 0;
+}
+
+function openPalette() {
+  const ov = document.getElementById('cmd-palette-overlay');
+  ov.classList.add('open');
+  const inp = document.getElementById('cmd-palette-input');
+  inp.value = '';
+  renderPalette('');
+  setTimeout(() => inp.focus(), 10);
+}
+
+function closePalette() {
+  document.getElementById('cmd-palette-overlay').classList.remove('open');
+}
+
+function renderPalette(query) {
+  const all = _buildPaletteCommands();
+  _cmdMatches = all
+    .map(c => ({ c, s: Math.max(_fuzzyScore(query, c.label), _fuzzyScore(query, c.group)) }))
+    .filter(x => x.s > 0)
+    .sort((a, b) => b.s - a.s)
+    .map(x => x.c);
+  _cmdActive = 0;
+  const box = document.getElementById('cmd-palette-results');
+  if (!_cmdMatches.length) {
+    box.innerHTML = '<div class="cmd-empty">No matching commands</div>';
+    return;
+  }
+  box.innerHTML = _cmdMatches.map((c, i) => `
+    <div class="cmd-item ${i === 0 ? 'active' : ''}" data-i="${i}" onmousedown="runCommand(${i})">
+      <span class="cmd-group">${c.group}</span>
+      <span class="cmd-icon">${c.icon}</span>
+      <span class="cmd-label">${c.label}</span>
+    </div>`).join('');
+}
+
+function movePalette(dir) {
+  if (!_cmdMatches.length) return;
+  _cmdActive = (_cmdActive + dir + _cmdMatches.length) % _cmdMatches.length;
+  const items = document.querySelectorAll('#cmd-palette-results .cmd-item');
+  items.forEach((el, i) => el.classList.toggle('active', i === _cmdActive));
+  items[_cmdActive] && items[_cmdActive].scrollIntoView({ block: 'nearest' });
+}
+
+function runCommand(i) {
+  const c = _cmdMatches[i != null ? i : _cmdActive];
+  if (!c) return;
+  closePalette();
+  if (c.run) c.run();
+  else if (c.view) go(c.view);
+}
+
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    const ov = document.getElementById('cmd-palette-overlay');
+    if (ov.classList.contains('open')) closePalette(); else openPalette();
+    return;
+  }
+  const ov = document.getElementById('cmd-palette-overlay');
+  if (!ov.classList.contains('open')) return;
+  if (e.key === 'Escape') { e.preventDefault(); closePalette(); }
+  else if (e.key === 'ArrowDown') { e.preventDefault(); movePalette(1); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); movePalette(-1); }
+  else if (e.key === 'Enter') { e.preventDefault(); runCommand(); }
+});
+
+document.getElementById('cmd-palette-input').addEventListener('input', (e) => renderPalette(e.target.value));
+
+function stopLiveAuto() {
+  if (liveAutoTimer) { clearInterval(liveAutoTimer); liveAutoTimer = null; }
+}
+
+// ═══ AUDIT TRAIL VIEW ═══
+function loadAudit() {
+  var el = document.getElementById('audit-content');
+  if (!el) return;
+  el.innerHTML = '<div style="color:var(--text-dim);padding:20px;text-align:center">Loading audit events…</div>';
+  var action = document.getElementById('audit-filter-action').value;
+  var status = document.getElementById('audit-filter-status').value;
+  var body = { limit: 200 };
+  if (action) body.action = action;
+  if (status) body.status = status;
+  authFetch('/api/audit/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(function(d) {
+      if (!d || !d.ok) { el.innerHTML = '<div style="color:var(--red);padding:20px">⚠️ ' + (d && d.error ? d.error : 'Failed to load audit events') + '</div>'; return; }
+      var events = d.events || [];
+      renderAuditStats(events);
+      if (!events.length) { el.innerHTML = '<div style="color:var(--text-dim);padding:20px;text-align:center">No audit events match this filter.</div>'; return; }
+      el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:11.5px">' +
+        '<thead><tr style="text-align:left;color:var(--text-dim);border-bottom:1px solid var(--border)">' +
+        '<th style="padding:6px 8px">Time</th><th style="padding:6px 8px">Action</th><th style="padding:6px 8px">User</th><th style="padding:6px 8px">Agent</th><th style="padding:6px 8px">Status</th></tr></thead><tbody>' +
+        events.map(function(e) {
+          var ts = (e.timestamp || '').replace('T', ' ').slice(0, 19);
+          var st = e.status === 'failure' ? '<span style="color:var(--red)">failure</span>' : '<span style="color:var(--green)">success</span>';
+          return '<tr style="border-bottom:1px solid var(--border)">' +
+            '<td style="padding:6px 8px;color:var(--text-dim);white-space:nowrap">' + ts + '</td>' +
+            '<td style="padding:6px 8px;font-family:monospace">' + (e.action || '') + '</td>' +
+            '<td style="padding:6px 8px">' + (e.user || '—') + '</td>' +
+            '<td style="padding:6px 8px">' + (e.agent || '—') + '</td>' +
+            '<td style="padding:6px 8px">' + st + '</td>' +
+          '</tr>';
+        }).join('') + '</tbody></table>';
+    })
+    .catch(function(err) { el.innerHTML = '<div style="color:var(--red);padding:20px">⚠️ ' + err.message + '</div>'; });
+}
+
+function renderAuditStats(events) {
+  var el = document.getElementById('audit-stats');
+  if (!el) return;
+  var total = events.length;
+  var byAction = {};
+  var failures = 0;
+  events.forEach(function(e) {
+    var a = (e.action || 'unknown').split('.')[0];
+    byAction[a] = (byAction[a] || 0) + 1;
+    if (e.status === 'failure') failures++;
+  });
+  var top = Object.keys(byAction).sort(function(x, y) { return byAction[y] - byAction[x]; }).slice(0, 4)
+    .map(function(k) { return '<span style="background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:3px 10px;font-size:11px">' + k + ' · ' + byAction[k] + '</span>'; })
+    .join('');
+  el.innerHTML =
+    '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 14px"><div style="font-size:18px;font-weight:700">' + total + '</div><div style="font-size:11px;color:var(--text-dim)">Events shown</div></div>' +
+    '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 14px"><div style="font-size:18px;font-weight:700;color:var(--green)">' + (total - failures) + '</div><div style="font-size:11px;color:var(--text-dim)">Success</div></div>' +
+    '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 14px"><div style="font-size:18px;font-weight:700;color:' + (failures ? 'var(--red)' : 'var(--green)') + '">' + failures + '</div><div style="font-size:11px;color:var(--text-dim)">Failures</div></div>' +
+    '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' + top + '</div>';
+}
+
+// ═══ ENTITY TIMELINE VIEW (durable domain context graph) ═══
+function loadEntities() {
+  var listEl = document.getElementById('entities-list');
+  var tlEl = document.getElementById('entities-timeline');
+  if (!listEl || !tlEl) return;
+  authFetch('/api/entities')
+    .then(function(d) {
+      if (!d || !d.ok) {
+        listEl.innerHTML = '<div style="color:var(--red);padding:8px">⚠️ ' + (d && d.error ? d.error : 'err') + '</div>';
+        return;
+      }
+      var entities = d.entities || [];
+      if (!entities.length) {
+        listEl.innerHTML = '<div style="color:var(--text-dim);padding:8px;font-size:12px">No entity snapshots yet.<br><br>Snapshots are recorded when tasks complete in the goal engine.</div>';
+        tlEl.innerHTML = '<div style="color:var(--text-dim);font-size:12px">Select an entity to view its timeline.</div>';
+        return;
+      }
+      var html = '';
+      for (var i = 0; i < entities.length; i++) {
+        var e = entities[i];
+        var ref = e.entity_ref || 'unknown';
+        var cnt = e.cnt || 0;
+        var seen = (e.last_seen || '').substring(11, 19);
+        html += '<div class="entity-item" onclick="loadEntityTimeline(\'' + ref.replace(/'/g, "\\'") + '\')" style="padding:9px 10px;border-bottom:1px solid var(--border);cursor:pointer;border-radius:6px">'
+              + '<div style="font-size:13px;font-weight:600;word-break:break-all">' + ref + '</div>'
+              + '<div style="font-size:11px;color:var(--text-dim)">' + cnt + ' snapshot' + (cnt === 1 ? '' : 's') + ' · ' + seen + '</div>'
+              + '</div>';
+      }
+      listEl.innerHTML = html;
+      if (entities[0]) loadEntityTimeline(entities[0].entity_ref);
+    })
+    .catch(function(err) {
+      listEl.innerHTML = '<div style="color:var(--red);padding:8px">⚠️ ' + err.message + '</div>';
+    });
+}
+
+function loadEntityTimeline(ref) {
+  var tlEl = document.getElementById('entities-timeline');
+  if (!tlEl) return;
+  if (!ref) { tlEl.innerHTML = '<div style="color:var(--text-dim);font-size:12px">No entity selected.</div>'; return; }
+  var items = document.querySelectorAll('.entity-item');
+  for (var i = 0; i < items.length; i++) {
+    if (items[i].textContent.indexOf(ref) === 0) {
+      items[i].style.background = 'var(--accent-soft, rgba(124,91,245,0.15))';
+    } else {
+      items[i].style.background = '';
+    }
+  }
+  authFetch('/api/entities/timeline?ref=' + encodeURIComponent(ref))
+    .then(function(d) {
+      if (!d || !d.ok) {
+        tlEl.innerHTML = '<div style="color:var(--red);padding:8px">⚠️ ' + (d && d.error ? d.error : 'err') + '</div>';
+        return;
+      }
+      var tl = d.timeline || [];
+      if (!tl.length) {
+        tlEl.innerHTML = '<div style="color:var(--text-dim);font-size:12px">No snapshots for this entity.</div>';
+        return;
+      }
+      var html = '<div style="font-size:15px;font-weight:700;margin-bottom:12px;word-break:break-all">' + ref + '</div>';
+      for (var j = 0; j < tl.length; j++) {
+        var s = tl[j];
+        var state = s.state || '{}';
+        var stateStr = '';
+        try { stateStr = JSON.stringify(JSON.parse(state), null, 2); } catch(e2) { stateStr = state; }
+        var ts = (s.updated_at || '').substring(0, 19);
+        var task = s.task_id || '';
+        html += '<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;background:var(--bg)">'
+              + '<div style="font-size:12px;font-weight:600;color:var(--accent)">' + ts + '</div>'
+              + (task ? '<div style="font-size:11px;color:var(--text-dim)">task: ' + task + '</div>' : '')
+              + '<pre style="margin:8px 0 0;font-size:11px;color:var(--text);white-space:pre-wrap;word-break:break-all;background:var(--surface);padding:8px;border-radius:6px">' + stateStr + '</pre>'
+              + '</div>';
+      }
+      tlEl.innerHTML = html;
+    })
+    .catch(function(err) {
+      tlEl.innerHTML = '<div style="color:var(--red);padding:8px">⚠️ ' + err.message + '</div>';
+    });
+}
+
+
+// INIT — runs after auth overlay is in the DOM
+authUpdateUI();
+if (!authToken) { authShowLogin(); }
+else { go('chat'); loadStats(); loadGoals(); }

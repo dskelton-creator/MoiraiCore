@@ -856,6 +856,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.send_error(404, "Dashboard not found at %s" % DASHBOARD)
             return
 
+        # ── SERVE FIRST-PARTY DASHBOARD ASSETS (style.css, app.js) ──
+        if p.path.startswith("/dashboard/"):
+            rel = p.path[len("/dashboard/"):]
+            if "/" in rel or ".." in rel:
+                self.send_error(403, "Forbidden")
+                return
+            asset_path = AGENT_OS_ROOT / "dashboard" / rel
+            if asset_path.exists() and asset_path.is_file() and asset_path.suffix in (".css", ".js"):
+                ctype = "text/css; charset=utf-8" if asset_path.suffix == ".css" else "application/javascript; charset=utf-8"
+                body = asset_path.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "public, max-age=3600")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                self.wfile.write(body)
+            else:
+                self.send_error(404, "Dashboard asset not found")
+            return
+
         # ── SERVE VENDORED FRONTEND BUNDLES ──
         # Local-first: third-party bundles (Excalidraw, React) are vendored here
         # so the Diagrams view works fully offline with no CDN dependency.

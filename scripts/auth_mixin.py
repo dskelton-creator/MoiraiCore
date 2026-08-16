@@ -70,6 +70,7 @@ def install_auth(handler_cls):
             "/api/lnb/",
             "/reports/",
             "/docs/",
+            "/dashboard/",  # First-party dashboard assets (style.css, app.js)
             "/vendor/",  # Vendored third-party frontend bundles (same-origin static JS)
         )
         if path in public_exact:
