@@ -2,11 +2,11 @@
 Model Router — Tier-based task delegation for multi-model orchestration.
 
 Routes project tasks to the correct execution tier:
-  Tier 1 (Owl Alpha): Strategic, state management, backlog
+  Tier 1 (Director): Strategic, state management, backlog
   Tier 2 Architect:
     - Gemini Pro: Architecture, broad context, Artifact generation (API-based)
     - Antigravity: Multi-agent orchestration, complex IDE-based development
-  Tier 3 (Ornith 9B): Single-file execution, test-driven fixes
+  Tier 3 (Builder): Single-file execution, test-driven fixes
 
 Tier 2 selection:
   - Default: Gemini Pro (fast, API-based, no IDE required)
@@ -25,9 +25,9 @@ from typing import Optional
 
 
 class Tier(Enum):
-    TIER_1_DIRECTOR = "tier_1_director"      # Owl Alpha — strategic
+    TIER_1_DIRECTOR = "tier_1_director"      # Director — strategic
     TIER_2_ARCHITECT = "tier_2_architect"    # Gemini Pro — blueprints
-    TIER_3_BUILDER = "tier_3_builder"        # Ornith 9B — execution
+    TIER_3_BUILDER = "tier_3_builder"        # Builder — execution
 
 
 class TaskType(Enum):
@@ -173,9 +173,9 @@ def route_task(description: str, context: dict = None) -> RoutingDecision:
     tier = TASK_TIER_MAP.get(task_type, Tier.TIER_3_BUILDER)
 
     engine_map = {
-        Tier.TIER_1_DIRECTOR: "owl-alpha",
+        Tier.TIER_1_DIRECTOR: "deepseek/deepseek-v4-pro",
         Tier.TIER_2_ARCHITECT: "gemini-3.1-pro",
-        Tier.TIER_3_BUILDER: "hf.co/deepreinforce-ai/Ornith-1.0-9B-GGUF:Q4_K_M",
+        Tier.TIER_3_BUILDER: "qwen2.5-coder:14b",
     }
 
     confidence = 0.8 if task_type in TASK_TIER_MAP else 0.5
