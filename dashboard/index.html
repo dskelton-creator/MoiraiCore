@@ -575,32 +575,32 @@
     </div>
   </div>
 
-  <!-- JARVIS CHAT (the Slack-like primary surface) -->
-  <div class="content view" id="view-jarvis">
+  <!-- MOIRAI CHAT (the Slack-like primary surface) -->
+  <div class="content view" id="view-moirai">
     <div class="chat-header">
       <span class="dot"></span>
       <div>
-        <div class="chat-header-name">Jarvis</div>
-        <div class="chat-header-desc" id="jarvis-session-label">Personal AI assistant</div>
+        <div class="chat-header-name">Moirai</div>
+        <div class="chat-header-desc" id="moirai-session-label">Personal AI assistant</div>
       </div>
       <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
-        <select id="jarvis-personality" onchange="jarvisSetPersonality(this.value)" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-size:11px;outline:none">
+        <select id="moirai-personality" onchange="moiraiSetPersonality(this.value)" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-size:11px;outline:none">
           <option value="professional">Professional</option>
           <option value="friendly">Friendly</option>
           <option value="concierge">Concierge</option>
           <option value="witty">Witty</option>
         </select>
-        <button class="btn small" onclick="jarvisNewSession()">＋ New</button>
-        <button class="btn small" onclick="jarvisClearChat()">✕</button>
+        <button class="btn small" onclick="moiraiNewSession()">＋ New</button>
+        <button class="btn small" onclick="moiraiClearChat()">✕</button>
       </div>
     </div>
-    <div id="jarvis-chat" class="chat-messages">
-      <div class="empty" id="jarvis-welcome" style="text-align:center;color:var(--text-dim);margin-top:40px">Start a conversation with Jarvis.<br>Ask anything — it remembers context across sessions.</div>
+    <div id="moirai-chat" class="chat-messages">
+      <div class="empty" id="moirai-welcome" style="text-align:center;color:var(--text-dim);margin-top:40px">Start a conversation with Moirai.<br>Ask anything — it remembers context across sessions.</div>
     </div>
     <div class="composer">
-      <textarea id="jarvis-input" placeholder="Message Jarvis…" rows="1" onkeydown="jarvisInputKey(event)"></textarea>
+      <textarea id="moirai-input" placeholder="Message Moirai…" rows="1" onkeydown="moiraiInputKey(event)"></textarea>
       <div class="composer-btns">
-        <button class="btn primary" id="jarvis-send-btn" onclick="jarvisSend()">Send</button>
+        <button class="btn primary" id="moirai-send-btn" onclick="moiraiSend()">Send</button>
       </div>
     </div>
   </div>
@@ -683,7 +683,7 @@
               <option value="completed">Completed</option>
               <option value="archived">Archived</option>
             </select>
-            <button class="btn" onclick="projectChat()" style="font-size:10px;padding:4px 10px">🧠 Jarvis</button>
+            <button class="btn" onclick="projectChat()" style="font-size:10px;padding:4px 10px">🧠 Moirai</button>
             <button class="btn" onclick="projectDelete()" style="font-size:10px;padding:4px 10px;color:var(--red)">🗑</button>
           </div>
         </div>

@@ -1,5 +1,5 @@
 """
-Jarvis Engine — Orchestrates personality, memory, context, and Hermes
+Moirai Engine — Orchestrates personality, memory, context, and Hermes
 to produce intelligent, personality-driven responses.
 
 This is the main entry point for conversational interactions.
@@ -12,13 +12,13 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from jarvis.personality import Personality
-from jarvis.memory import ConversationMemory
-from jarvis.context import ContextEngine
+from moirai.personality import Personality
+from moirai.memory import ConversationMemory
+from moirai.context import ContextEngine
 
 
-class Jarvis:
-    """The Jarvis conversational intelligence engine."""
+class Moirai:
+    """The Moirai conversational intelligence engine."""
 
     def __init__(
         self,

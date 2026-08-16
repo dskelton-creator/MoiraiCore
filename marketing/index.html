@@ -3,8 +3,28 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MoiraiCore — Local-first, provider-agnostic AI orchestration</title>
-<meta name="description" content="MoiraiCore is a self-hosted, local-first AI orchestration platform for solo developers and small teams. Your models, your data, your machine. Open source (MIT), provider-agnostic, with a governed 3-tier agent pipeline and ScrumGate enforcement.">
+<title>MoiraiCore — Local-First AI Orchestration Platform</title>
+<meta name="description" content="Local-first, open-source AI orchestration for solo developers and small teams. Run governed multi-agent pipelines on your machine with any provider — MIT licensed.">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+<meta name="theme-color" content="#0a0a0f">
+<!-- UPDATE BEFORE DEPLOY: replace every https://moiraicore.dev/ placeholder with the real production domain -->
+<link rel="canonical" href="https://moiraicore.dev/">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%237c5bf5'/><text x='32' y='45' font-family='Arial,sans-serif' font-size='34' font-weight='700' fill='white' text-anchor='middle'>M</text></svg>">
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="MoiraiCore">
+<meta property="og:title" content="MoiraiCore — Local-First AI Orchestration Platform">
+<meta property="og:description" content="Self-hosted, provider-agnostic AI orchestration for solo developers and small teams. Your models, your data, your machine — MIT licensed.">
+<meta property="og:url" content="https://moiraicore.dev/">
+<meta property="og:image" content="https://moiraicore.dev/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="en_US">
+<!-- Twitter / X -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="MoiraiCore — Local-First AI Orchestration Platform">
+<meta name="twitter:description" content="Self-hosted, provider-agnostic AI orchestration for solo developers and small teams.">
+<meta name="twitter:image" content="https://moiraicore.dev/og.png">
 <style>
 :root{
   --bg:#0a0a0f; --surface:#12121a; --surface2:#1a1a26; --border:#2a2a3a;
@@ -185,6 +205,17 @@ footer{padding:40px 0;color:var(--text-dim);font-size:13.5px}
 .foot-inner .brand{font-size:14px}
 .foot-links{display:flex;gap:22px;flex-wrap:wrap}
 
+/* ── FAQ ── */
+.faq{max-width:820px;margin-top:44px;display:grid;gap:12px}
+.faq details{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 22px;transition:border-color .15s}
+.faq details[open]{border-color:var(--accent)}
+.faq summary{cursor:pointer;font-weight:700;font-size:15.5px;display:flex;justify-content:space-between;align-items:center;gap:14px;list-style:none}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:'+';font-family:var(--mono);color:var(--accent2);font-size:18px;line-height:1;transition:transform .15s}
+.faq details[open] summary::after{content:'−'}
+.faq details p{margin-top:12px;font-size:14.5px;color:var(--text-dim);line-height:1.7}
+.faq details code{color:var(--cyan);font-size:13px}
+
 @media(max-width:860px){
   .nav-links{display:none}
   .principles .grid,.tiers,.qs-steps,.arch-flow{grid-template-columns:1fr}
@@ -192,6 +223,49 @@ footer{padding:40px 0;color:var(--text-dim);font-size:13.5px}
   .env-table{font-size:12.5px}
 }
 </style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://moiraicore.dev/#website",
+      "url": "https://moiraicore.dev/",
+      "name": "MoiraiCore",
+      "publisher": {"@id": "https://moiraicore.dev/#organization"}
+    },
+    {
+      "@type": "Organization",
+      "@id": "https://moiraicore.dev/#organization",
+      "name": "MoiraiCore",
+      "url": "https://moiraicore.dev/",
+      "logo": "https://moiraicore.dev/og.png",
+      "sameAs": ["https://github.com/MoiraiCore/MoiraiCore"]
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://moiraicore.dev/#software",
+      "name": "MoiraiCore",
+      "url": "https://moiraicore.dev/",
+      "description": "Local-first, open-source AI orchestration platform for solo developers and small teams. Provider-agnostic multi-agent pipelines with a governed 3-tier architecture and ScrumGate merge enforcement.",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Linux, macOS (self-hosted)",
+      "license": "https://opensource.org/licenses/MIT",
+      "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
+      "featureList": [
+        "Local-first execution - data stays on your machine",
+        "Provider-agnostic Tier 2 (OpenRouter, DeepSeek, Gemini, Ollama)",
+        "3-tier agent pipeline with ScrumGate merge enforcement",
+        "Mission Control dashboard (single-file SPA)",
+        "Memory vault with SQLite FTS5 knowledge graph",
+        "Goal engine with kanban task routing",
+        "JWT auth, PBKDF2-SHA256 hashing, and audit log"
+      ],
+      "creator": {"@id": "https://moiraicore.dev/#organization"}
+    }
+  ]
+}
+</script>
 </head>
 <body>
 
@@ -209,6 +283,8 @@ footer{padding:40px 0;color:var(--text-dim);font-size:13.5px}
     </div>
   </div>
 </nav>
+
+<main>
 
 <!-- ─────────── HERO ─────────── -->
 <section class="hero">
@@ -288,7 +364,7 @@ footer{padding:40px 0;color:var(--text-dim);font-size:13.5px}
       <div class="card">
         <div class="mono-tag mk-blue">ORCHESTRATION</div>
         <h3>Mission Control dashboard</h3>
-        <p>A single-file SPA (served by the control plane at <code>:7878</code>) that unifies home, Jarvis, goals, agents, kanban, outputs, vault, and reports in one place.</p>
+        <p>A single-file SPA (served by the control plane at <code>:7878</code>) that unifies home, Moirai, goals, agents, kanban, outputs, vault, and reports in one place.</p>
       </div>
       <div class="card">
         <div class="mono-tag mk-purple">PLANNING</div>
@@ -390,7 +466,7 @@ footer{padding:40px 0;color:var(--text-dim);font-size:13.5px}
         <div class="arch-node bd-none">
           <div class="n-label mk-purple">ENTRY POINTS</div>
           <h4>You</h4>
-          <p>Mission Control dashboard (:7878) · Hermes Bridge CLI · Jarvis chat</p>
+          <p>Mission Control dashboard (:7878) · Hermes Bridge CLI · Moirai chat</p>
         </div>
         <div class="arch-line"><span>▾</span></div>
         <div class="arch-node">
@@ -466,7 +542,7 @@ footer{padding:40px 0;color:var(--text-dim);font-size:13.5px}
         <p>Run real AI work through one governed workspace.</p>
         <ol>
           <li><b>Create goals</b> — the goal engine decomposes them</li>
-          <li><b>Chat with Jarvis</b> — conversational intelligence with personality + session memory</li>
+          <li><b>Chat with Moirai</b> — conversational intelligence with personality + session memory</li>
           <li><b>Manage specialist agents</b> — route work to the right specialist</li>
           <li><b>Track on the kanban</b> — tasks move through the board</li>
           <li><b>Organize workspaces</b> — isolate customer/project spaces over HTTP</li>
@@ -486,7 +562,7 @@ footer{padding:40px 0;color:var(--text-dim);font-size:13.5px}
 <span class="cmt"># 2. Optional: native Gemini fallback for Tier 2 resilience</span>
 <span class="cmt">#    export TIER2_PROVIDER=gemini ; export GEMINI_API_KEY=...</span>
 
-<span class="cmt"># 3. Chat with Jarvis / route work from the terminal</span>
+<span class="cmt"># 3. Chat with Moirai / route work from the terminal</span>
 <span class="cm">$</span> python3 hermes_bridge.py ask <span class="st">"Summarise this"</span> --context <span class="st">"..."</span>
 <span class="cm">$</span> python3 hermes_bridge.py route <span class="st">"write a blog post about security"</span>
 <span class="cm">$</span> python3 hermes_bridge.py orchestrate <span class="st">"Build a full SEO analysis"</span></pre>
@@ -549,7 +625,7 @@ footer{padding:40px 0;color:var(--text-dim);font-size:13.5px}
       </div>
       <div class="feature-card">
         <span class="tag">CONVERSATION</span>
-        <h3>Jarvis</h3>
+        <h3>Moirai</h3>
         <p>Conversational intelligence engine with personality selection, session persistence, memory-oriented context, and multi-agent routing under the hood.</p>
       </div>
       <div class="feature-card">
@@ -608,6 +684,72 @@ footer{padding:40px 0;color:var(--text-dim);font-size:13.5px}
   </div>
 </section>
 
+<!-- ─────────── FAQ ─────────── -->
+<section id="faq">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 class="kicker">FAQ</h2>
+      <h2>Questions people actually ask.</h2>
+    </div>
+    <div class="faq">
+      <details open>
+        <summary>Is my data sent to the cloud?</summary>
+        <p>No — MoiraiCore is local-first by design. The server binds to <code>localhost:7878</code> and all state (vault, goals, output, config) lives on your machine, with zero telemetry by default. The only outbound traffic is API calls to model providers you explicitly configure. Run Tier 3 on Ollama and even those can go fully offline.</p>
+      </details>
+      <details>
+        <summary>Which models and providers does it support?</summary>
+        <p>Any <b>OpenAI-compatible</b> endpoint via environment variables — <b>OpenRouter</b> and <b>DeepSeek</b> are the defaults — plus native <b>Gemini</b> as a fallback, <b>Ollama</b> for the local builder tier, and <b>Antigravity</b>/<b>Codex</b> integrations. Swapping providers is an env-var change, never a code change.</p>
+      </details>
+      <details>
+        <summary>Is MoiraiCore free and open source?</summary>
+        <p>Yes. It is <b>MIT licensed</b> and self-hosted — fork it, audit it, extend it. There are no license servers or SaaS fees; you only ever pay for model API usage you choose, and you can run entirely on local models for free.</p>
+      </details>
+      <details>
+        <summary>What is ScrumGate?</summary>
+        <p>ScrumGate is the merge gate in the 3-tier pipeline. Every generated change goes <b>generate → evaluate → merge</b>: syntax, security, and structure checks run before anything lands in protected <code>src/</code>. Direct writes by agents are blocked — nothing reaches your codebase unexamined.</p>
+      </details>
+      <details>
+        <summary>How is this different from other agent frameworks?</summary>
+        <p>Most frameworks are single-agent assistants or cloud-hosted services. MoiraiCore is a <b>governed multi-agent team that runs on your machine</b>: a ScrumMaster plans, an architect generates, a local builder executes, and a gate reviews every change before merge — with your data never leaving your hardware.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Is my data sent to the cloud?",
+      "acceptedAnswer": {"@type": "Answer", "text": "No. MoiraiCore is local-first by design: the server binds to localhost:7878, all state lives on your machine, and zero telemetry is sent by default. The only outbound traffic is API calls to model providers you explicitly configure; running Tier 3 on Ollama can go fully offline."}
+    },
+    {
+      "@type": "Question",
+      "name": "Which models and providers does MoiraiCore support?",
+      "acceptedAnswer": {"@type": "Answer", "text": "Any OpenAI-compatible endpoint via environment variables — OpenRouter and DeepSeek are the defaults — plus native Gemini as a fallback, Ollama for the local builder tier, and Antigravity/Codex integrations. Swapping providers is an env-var change, never a code change."}
+    },
+    {
+      "@type": "Question",
+      "name": "Is MoiraiCore free and open source?",
+      "acceptedAnswer": {"@type": "Answer", "text": "Yes. MoiraiCore is MIT licensed and self-hosted. There are no license servers or SaaS fees; you only pay for model API usage you choose, and it can run entirely on local models for free."}
+    },
+    {
+      "@type": "Question",
+      "name": "What is ScrumGate?",
+      "acceptedAnswer": {"@type": "Answer", "text": "ScrumGate is the merge gate in the 3-tier pipeline. Every generated change goes generate, then evaluate, then merge: syntax, security, and structure checks run before anything lands in protected src/. Direct writes by agents are blocked."}
+    },
+    {
+      "@type": "Question",
+      "name": "How is MoiraiCore different from other agent frameworks?",
+      "acceptedAnswer": {"@type": "Answer", "text": "Most frameworks are single-agent assistants or cloud-hosted services. MoiraiCore is a governed multi-agent team that runs on your machine: a ScrumMaster plans, an architect generates, a local builder executes, and a gate reviews every change before merge, with data never leaving your hardware."}
+    }
+  ]
+}
+</script>
+
 <!-- ─────────── CTA ─────────── -->
 <section class="cta">
   <div class="wrap">
@@ -619,6 +761,7 @@ footer{padding:40px 0;color:var(--text-dim);font-size:13.5px}
     </div>
   </div>
 </section>
+</main>
 
 <footer>
   <div class="wrap foot-inner">

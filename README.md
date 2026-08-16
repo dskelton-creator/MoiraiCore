@@ -100,7 +100,7 @@ Direct writes to `src/` are blocked; all code goes through generate → evaluate
 MoiraiCore/
 ├── scripts/          ← Server + orchestration modules (auth, goal engine, scrum, vault, workers)
 ├── dashboard/        ← Mission Control SPA
-├── jarvis/           ← Conversational intelligence engine
+├── moirai/           ← Conversational intelligence engine
 ├── docs/             ← Design wiki
 ├── tests/            ← Test suite
 ├── data/             ← Architecture diagrams

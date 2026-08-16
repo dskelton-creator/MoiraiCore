@@ -37,7 +37,7 @@ Relevant security properties:
 
 ## Scope
 
-In scope: the `scripts/`, `dashboard/`, `jarvis/` modules and the 3-tier
+In scope: the `scripts/`, `dashboard/`, `moirai/` modules and the 3-tier
 pipeline in this repository.
 
 Out of scope: third-party dependencies, your own `.env` contents, and any

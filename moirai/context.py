@@ -1,5 +1,5 @@
 """
-Context Engine — Assembles real-time context for Jarvis prompts.
+Context Engine — Assembles real-time context for Moirai prompts.
 
 Gathers signals from:
   - Time of day, day of week
@@ -13,7 +13,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from jarvis.memory import ConversationMemory
+from moirai.memory import ConversationMemory
 
 
 class ContextEngine:

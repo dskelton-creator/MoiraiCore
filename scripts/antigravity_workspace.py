@@ -49,7 +49,7 @@ ANTIGRAVITY_WORKSPACE_FILE = ".antigravity/workspace.json"
 HERMES_CORE_PATHS = [
     "config/",
     "dashboard/",
-    "jarvis/",
+    "moirai/",
     "memory-vault/",
     "scripts/",
     "workspace/",

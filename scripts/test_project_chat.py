@@ -43,13 +43,13 @@ def test_parse_mention_negatives():
 # ── message persistence ──
 def test_message_roundtrip():
     add_message("acme", "user", "hello", agent_name="user")
-    add_message("acme", "assistant", "hi there", agent_name="jarvis")
+    add_message("acme", "assistant", "hi there", agent_name="moirai")
     add_agent_transcript("acme", "Developer", "working on task-1")
     msgs = get_messages("acme")
     roles = [m["role"] for m in msgs]
     assert roles == ["user", "assistant", "agent_transcript"]
     assert msgs[0]["agent_name"] == "user"
-    assert msgs[1]["agent_name"] == "jarvis"
+    assert msgs[1]["agent_name"] == "moirai"
     assert msgs[2]["content"] == "working on task-1"
 
 
@@ -68,4 +68,4 @@ def test_get_team_roster_structure():
 def test_list_agents_used_excludes_user():
     used = list_agents_used("acme")
     assert "user" not in used
-    assert "jarvis" in used
+    assert "moirai" in used

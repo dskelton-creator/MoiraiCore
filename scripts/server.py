@@ -2579,26 +2579,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
             })
             return
 
-        # ── JARVIS CONVERSATION API (GET endpoints) ──
-        if p.path == "/api/jarvis/greeting":
+        # ── MOIRAI CONVERSATION API (GET endpoints) ──
+        if p.path == "/api/moirai/greeting":
             personality = parse_qs(p.query).get("personality", ["professional"])[0]
             sys.path.insert(0, str(AGENT_OS_ROOT))
-            from jarvis.engine import Jarvis
-            jarvis = Jarvis(personality_preset=personality)
-            _json(self, {"ok": True, "greeting": jarvis.greet()})
+            from moirai.engine import Moirai
+            moirai = Moirai(personality_preset=personality)
+            _json(self, {"ok": True, "greeting": moirai.greet()})
             return
 
-        if p.path == "/api/jarvis/sessions":
+        if p.path == "/api/moirai/sessions":
             sys.path.insert(0, str(AGENT_OS_ROOT))
-            from jarvis.memory import ConversationMemory
+            from moirai.memory import ConversationMemory
             mem = ConversationMemory()
             sessions = mem.get_recent_sessions(limit=20)
             _json(self, {"ok": True, "sessions": sessions})
             return
 
-        if p.path == "/api/jarvis/memory":
+        if p.path == "/api/moirai/memory":
             sys.path.insert(0, str(AGENT_OS_ROOT))
-            from jarvis.memory import ConversationMemory
+            from moirai.memory import ConversationMemory
             mem = ConversationMemory()
             facts = mem.recall_all()
             _json(self, {"ok": True, "memory": facts})
@@ -2758,8 +2758,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if self.handle_diagrams(p):
             return
 
-        # ── JARVIS CHAT (POST) ──
-        if p.path == "/api/jarvis/chat":
+        # ── MOIRAI CHAT (POST) ──
+        if p.path == "/api/moirai/chat":
             body = self._read_json_body()
             if not body:
                 return
@@ -2771,14 +2771,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             personality = body.get("personality", "professional")
             user_id = body.get("user_id", "default")
             sys.path.insert(0, str(AGENT_OS_ROOT))
-            from jarvis.engine import Jarvis
-            jarvis = Jarvis(personality_preset=personality, user_id=user_id)
+            from moirai.engine import Moirai
+            moirai = Moirai(personality_preset=personality, user_id=user_id)
             if session_id:
-                jarvis.resume_session(session_id)
+                moirai.resume_session(session_id)
             else:
-                jarvis.start_session()
-            result = jarvis.send(message)
-            result["session_id"] = jarvis.session_id
+                moirai.start_session()
+            result = moirai.send(message)
+            result["session_id"] = moirai.session_id
             _json(self, result)
             return
 
@@ -2854,7 +2854,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 session_id=session_id,
             )
 
-            # ── Send the message — route to a specific agent via @mention, else Jarvis ──
+            # ── Send the message — route to a specific agent via @mention, else Moirai ──
             import time
             sys.path.insert(0, str(AGENT_OS_ROOT / "scripts"))
             from project_chat import parse_mention
@@ -2920,23 +2920,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     assistant_msg = None
             else:
                 sys.path.insert(0, str(AGENT_OS_ROOT))
-                from jarvis.engine import Jarvis
-                jarvis = Jarvis(personality_preset=personality, user_id=name)
+                from moirai.engine import Moirai
+                moirai = Moirai(personality_preset=personality, user_id=name)
                 if session_id:
-                    jarvis.resume_session(session_id)
+                    moirai.resume_session(session_id)
                 else:
-                    jarvis.start_session(title=f"Project Chat: {name}")
-                result = jarvis.send(message)
+                    moirai.start_session(title=f"Project Chat: {name}")
+                result = moirai.send(message)
                 response_text = result.get("response", "")
-                resp_session = jarvis.session_id
+                resp_session = moirai.session_id
                 if response_text:
                     assistant_msg = add_message(
                         project_name=name,
                         role="assistant",
                         content=response_text,
-                        agent_name="jarvis",
+                        agent_name="moirai",
                         msg_type="message",
-                        session_id=jarvis.session_id,
+                        session_id=moirai.session_id,
                     )
                 else:
                     assistant_msg = None

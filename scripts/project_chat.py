@@ -10,7 +10,7 @@ Message schema (one JSON object per line in messages.jsonl):
     "id": "msg_<uuid>",
     "role": "user" | "assistant" | "agent_transcript" | "system",
     "content": "message text",
-    "agent_name": "user" | "jarvis" | "researcher" | "writer" | ...,
+    "agent_name": "user" | "moirai" | "researcher" | "writer" | ...,
     "timestamp": "2026-07-29T12:00:00",
     "type": "message" | "transcript" | "goal_update" | "task_complete",
     "session_id": "sess_<uuid>",
@@ -108,7 +108,7 @@ def add_message(
         project_name: Name of the project.
         role: 'user', 'assistant', 'agent_transcript', or 'system'.
         content: Message body text.
-        agent_name: Display name of the sender (e.g. 'user', 'jarvis', 'researcher').
+        agent_name: Display name of the sender (e.g. 'user', 'moirai', 'researcher').
         msg_type: 'message', 'transcript', 'goal_update', 'task_complete'.
         session_id: Optional session ID for threading.
         metadata: Optional dict with extra data (goal_id, task_id, etc.).

@@ -1,11 +1,11 @@
 """
-Personality Layer — Configurable voice persona for Jarvis.
+Personality Layer — Configurable voice persona for Moirai.
 
-Controls how Jarvis speaks, not what it says.
+Controls how Moirai speaks, not what it says.
 Supports presets and custom overrides.
 """
 
-from jarvis import PERSONALITIES
+from moirai import PERSONALITIES
 
 
 class Personality:

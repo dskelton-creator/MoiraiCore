@@ -296,21 +296,21 @@ function toggleAdmin() {
 function go(view, el) {
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-  // Chat is the landing — loads Jarvis chat as the Slack-like primary interface
+  // Chat is the landing — loads Moirai chat as the Slack-like primary interface
   if (view === 'chat') {
-    view = 'jarvis';  // Chat = Jarvis under the hood
-    document.getElementById('view-jarvis').classList.add('active');
-    loadJarvis();
+    view = 'moirai';  // Chat = Moirai under the hood
+    document.getElementById('view-moirai').classList.add('active');
+    loadMoirai();
   }
   var viewEl = document.getElementById('view-'+view);
   if (viewEl) viewEl.classList.add('active');
   if(el) el.classList.add('active');
   if(window.innerWidth <= 1024) document.querySelector('.sidebar').classList.remove('open');
   if(view==='dashboard') { loadHome(); }
-  if(view==='jarvis') { loadJarvis(); }
+  if(view==='moirai') { loadMoirai(); }
   if(view==='projects') { loadProjects(); }
   if(view==='outputs') { loadOutputs(); }
-  const t = {dashboard:'Overview',chat:'Chat',jarvis:'Chat',projects:'Projects',kanban:'Kanban',goals:'Goals',graph:'Knowledge Graph',agents:'Agents',notes:'Notes',tasks:'Tasks',outputs:'Outputs',reports:'Reports',systemlogs:'System Logs',audit:'Audit Trail',settings:'Settings',pipeline:'Pipeline',tier3:'3-Tier Pipeline',entities:'Entity Timeline'};
+  const t = {dashboard:'Overview',chat:'Chat',moirai:'Chat',projects:'Projects',kanban:'Kanban',goals:'Goals',graph:'Knowledge Graph',agents:'Agents',notes:'Notes',tasks:'Tasks',outputs:'Outputs',reports:'Reports',systemlogs:'System Logs',audit:'Audit Trail',settings:'Settings',pipeline:'Pipeline',tier3:'3-Tier Pipeline',entities:'Entity Timeline'};
   document.getElementById('page-title').textContent = t[view]||view;
   if(view==='kanban') loadKanban();
   if(view==='graph') setTimeout(function(){ loadGraph(); }, 100);
@@ -3555,7 +3555,7 @@ async function projectQuickAdd() {
         typing.id = 'pd-chat-typing';
         typing.innerHTML =
           '<span class="jl-spinner"></span> ' +
-          '<span class="jl-tag">Jarvis is working</span> ' +
+          '<span class="jl-tag">Moirai is working</span> ' +
           '<span class="jl-dot"></span><span class="jl-dot"></span><span class="jl-dot"></span> ' +
           '<span class="jl-timer">0s</span>';
         // live elapsed timer; cleared when the element is removed
@@ -3710,7 +3710,7 @@ function _chatBubble(msg) {
       const label = document.createElement('div');
       label.style.cssText = 'font-size:9px;color:var(--text-dim);margin-bottom:2px;padding-left:4px';
       const emoji = (msg.metadata && msg.metadata.emoji) ? (msg.metadata.emoji + ' ') : '';
-      label.textContent = emoji + (msg.agent_name || 'Jarvis');
+      label.textContent = emoji + (msg.agent_name || 'Moirai');
       div.appendChild(label);
     }
 
@@ -3806,48 +3806,48 @@ function projectMention(key) {
 
 function projectChat() {
   if (!_projectCurrent) return;
-  // Navigate to Jarvis and pre-set the context
-  go('jarvis');
-  const input = document.getElementById('jarvis-input');
+  // Navigate to Moirai and pre-set the context
+  go('moirai');
+  const input = document.getElementById('moirai-input');
   if (input) input.value = 'I\'m working on the project "' + _projectCurrent + '". ';
 }
 
-// ═══ JARVIS CHAT ═══
-let jarvisSessionId = null;
-let jarvisPersonality = "professional";
-let jarvisLoadTimer = null;
+// ═══ MOIRAI CHAT ═══
+let moiraiSessionId = null;
+let moiraiPersonality = "professional";
+let moiraiLoadTimer = null;
 
-async function loadJarvis() {
+async function loadMoirai() {
   // Load greeting
   try {
-    const r = await authFetch('/api/jarvis/greeting?personality=' + jarvisPersonality);
+    const r = await authFetch('/api/moirai/greeting?personality=' + moiraiPersonality);
     if (r && r.greeting) {
-      const welcome = document.getElementById('jarvis-welcome');
+      const welcome = document.getElementById('moirai-welcome');
       if (welcome) welcome.innerHTML = r.greeting;
     }
   } catch(e) {}
 }
 
-function jarvisSetPersonality(val) {
-  jarvisPersonality = val;
-  loadJarvis();
+function moiraiSetPersonality(val) {
+  moiraiPersonality = val;
+  loadMoirai();
 }
 
-function jarvisInputKey(e) {
+function moiraiInputKey(e) {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
-    jarvisSend();
+    moiraiSend();
   }
 }
 
-async function jarvisSend() {
-  const input = document.getElementById('jarvis-input');
+async function moiraiSend() {
+  const input = document.getElementById('moirai-input');
   const message = (input.value || '').trim();
   if (!message) return;
 
-  const chat = document.getElementById('jarvis-chat');
-  const sendBtn = document.getElementById('jarvis-send-btn');
-  const welcome = document.getElementById('jarvis-welcome');
+  const chat = document.getElementById('moirai-chat');
+  const sendBtn = document.getElementById('moirai-send-btn');
+  const welcome = document.getElementById('moirai-welcome');
   if (welcome) welcome.style.display = 'none';
 
   // User message
@@ -3857,38 +3857,38 @@ async function jarvisSend() {
   chat.appendChild(userDiv);
 
   // Loading — animated "still working" indicator
-  if (!document.getElementById('jarvis-loading-style')) {
+  if (!document.getElementById('moirai-loading-style')) {
     const st = document.createElement('style');
-    st.id = 'jarvis-loading-style';
+    st.id = 'moirai-loading-style';
     st.textContent = [
-      '#jarvis-loading .jl-spinner{width:14px;height:14px;border:2px solid var(--border,#3a3a4a);',
+      '#moirai-loading .jl-spinner{width:14px;height:14px;border:2px solid var(--border,#3a3a4a);',
       '  border-top-color:var(--green,#4ade80);border-radius:50%;display:inline-block;',
       '  animation:jl-spin .8s linear infinite;vertical-align:-3px;flex:none}',
       '@keyframes jl-spin{to{transform:rotate(360deg)}}',
-      '#jarvis-loading .jl-dot{width:6px;height:6px;border-radius:50%;background:var(--green,#4ade80);',
+      '#moirai-loading .jl-dot{width:6px;height:6px;border-radius:50%;background:var(--green,#4ade80);',
       '  display:inline-block;margin:0 2px;animation:jl-bounce 1.2s infinite ease-in-out}',
-      '#jarvis-loading .jl-dot:nth-child(2){animation-delay:.15s}',
-      '#jarvis-loading .jl-dot:nth-child(3){animation-delay:.3s}',
+      '#moirai-loading .jl-dot:nth-child(2){animation-delay:.15s}',
+      '#moirai-loading .jl-dot:nth-child(3){animation-delay:.3s}',
       '@keyframes jl-bounce{0%,60%,100%{transform:translateY(0);opacity:.35}',  ' 30%{transform:translateY(-4px);opacity:1}}',
-      '#jarvis-loading .jl-timer{font-size:11px;color:var(--text-dim,#888)}',
-      '#jarvis-loading .jl-tag{font-weight:600}'
+      '#moirai-loading .jl-timer{font-size:11px;color:var(--text-dim,#888)}',
+      '#moirai-loading .jl-tag{font-weight:600}'
     ].join('\n');
     document.head.appendChild(st);
   }
 
   const loadingDiv = document.createElement('div');
-  loadingDiv.id = 'jarvis-loading';
+  loadingDiv.id = 'moirai-loading';
   loadingDiv.style.cssText = 'background:var(--bg);border:1px solid var(--border);border-radius:8px 8px 8px 0;padding:10px 14px;align-self:flex-start;max-width:80%';
   loadingDiv.innerHTML =
     '<span class="jl-spinner"></span> ' +
-    '<span class="jl-tag" style="color:var(--green,#4ade80)">Jarvis is working</span> ' +
+    '<span class="jl-tag" style="color:var(--green,#4ade80)">Moirai is working</span> ' +
     '<span class="jl-dot"></span><span class="jl-dot"></span><span class="jl-dot"></span> ' +
     '<span class="jl-timer">0s</span>';
   chat.appendChild(loadingDiv);
   const _t0 = Date.now();
-  jarvisLoadTimer = setInterval(() => {
-    const el = document.getElementById('jarvis-loading');
-    if (!el) { clearInterval(jarvisLoadTimer); return; }
+  moiraiLoadTimer = setInterval(() => {
+    const el = document.getElementById('moirai-loading');
+    if (!el) { clearInterval(moiraiLoadTimer); return; }
     const t = el.querySelector('.jl-timer');
     if (t) t.textContent = Math.floor((Date.now() - _t0) / 1000) + 's';
   }, 1000);
@@ -3903,27 +3903,27 @@ async function jarvisSend() {
     // the server is now threaded so other requests aren't blocked meanwhile.
     const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
     const watchdog = controller ? setTimeout(() => controller.abort(), 300000) : null;
-    const result = await authFetch('/api/jarvis/chat', {
+    const result = await authFetch('/api/moirai/chat', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       signal: controller ? controller.signal : undefined,
-      body: JSON.stringify({message, session_id: jarvisSessionId, personality: jarvisPersonality}),
+      body: JSON.stringify({message, session_id: moiraiSessionId, personality: moiraiPersonality}),
     });
     if (watchdog) clearTimeout(watchdog);
 
     loadingDiv.remove();
-    if (jarvisLoadTimer) { clearInterval(jarvisLoadTimer); jarvisLoadTimer = null; }
+    if (moiraiLoadTimer) { clearInterval(moiraiLoadTimer); moiraiLoadTimer = null; }
 
     if (result && result.session_id) {
-      jarvisSessionId = result.session_id;
-      const label = document.getElementById('jarvis-session-label');
-      if (label) label.textContent = 'Session: ' + jarvisSessionId.slice(0, 12) + '…';
+      moiraiSessionId = result.session_id;
+      const label = document.getElementById('moirai-session-label');
+      if (label) label.textContent = 'Session: ' + moiraiSessionId.slice(0, 12) + '…';
     }
 
     const respDiv = document.createElement('div');
     respDiv.className = 'msg-row';
     if (result && result.response) {
-      const name = result.agent_name || 'Jarvis';
+      const name = result.agent_name || 'Moirai';
       respDiv.innerHTML = '<div class="msg-avatar agent">🧠</div><div class="msg-content"><div class="msg-author agent">' + name + '</div><div class="msg-text agent">' + result.response.replace(/</g,'&lt;').replace(/\n/g,'<br>') + '</div></div>';
     } else {
       const errMsg = (result && result.error) || 'No response';
@@ -3932,12 +3932,12 @@ async function jarvisSend() {
     chat.appendChild(respDiv);
   } catch(e) {
     loadingDiv.remove();
-    if (jarvisLoadTimer) { clearInterval(jarvisLoadTimer); jarvisLoadTimer = null; }
+    if (moiraiLoadTimer) { clearInterval(moiraiLoadTimer); moiraiLoadTimer = null; }
     const errDiv = document.createElement('div');
     errDiv.className = 'msg-row';
     const timedOut = e && e.name === 'AbortError';
     errDiv.innerHTML = timedOut
-      ? '<div class="msg-avatar agent">⏱</div><div class="msg-content"><div class="msg-author agent">Timeout</div><div class="msg-text agent">Jarvis took longer than 5 minutes to respond. The request was cancelled — please try again.</div></div>'
+      ? '<div class="msg-avatar agent">⏱</div><div class="msg-content"><div class="msg-author agent">Timeout</div><div class="msg-text agent">Moirai took longer than 5 minutes to respond. The request was cancelled — please try again.</div></div>'
       : '<div class="msg-avatar agent">⚠️</div><div class="msg-content"><div class="msg-author agent">Error</div><div class="msg-text agent">' + (e.message || 'request failed') + '</div></div>';
     chat.appendChild(errDiv);
   }
@@ -3946,17 +3946,17 @@ async function jarvisSend() {
   if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Send'; }
 }
 
-function jarvisNewSession() {
-  jarvisSessionId = null;
-  const label = document.getElementById('jarvis-session-label');
+function moiraiNewSession() {
+  moiraiSessionId = null;
+  const label = document.getElementById('moirai-session-label');
   if (label) label.textContent = 'Personal AI assistant';
-  jarvisClearChat();
-  loadJarvis();
+  moiraiClearChat();
+  loadMoirai();
 }
 
-function jarvisClearChat() {
-  const chat = document.getElementById('jarvis-chat');
-  chat.innerHTML = '<div class="empty" id="jarvis-welcome" style="text-align:center;color:var(--text-dim);margin-top:40px">Start a conversation with Jarvis.<br>Ask anything — it remembers context across sessions.</div>';
+function moiraiClearChat() {
+  const chat = document.getElementById('moirai-chat');
+  chat.innerHTML = '<div class="empty" id="moirai-welcome" style="text-align:center;color:var(--text-dim);margin-top:40px">Start a conversation with Moirai.<br>Ask anything — it remembers context across sessions.</div>';
 }
 
 // ═══ LIVE ACTIVITY MONITOR ═══
@@ -4151,7 +4151,7 @@ function startLiveAuto() {
 // ── COMMAND PALETTE (Cmd/Ctrl+K) ──
 const CMD_PALETTE_VIEW_CMDS = [
   { id:'go-dashboard', label:'Go to Home', icon:'🏠', group:'Navigate', view:'dashboard' },
-  { id:'go-jarvis', label:'Go to Jarvis', icon:'🧠', group:'Navigate', view:'jarvis' },
+  { id:'go-moirai', label:'Go to Moirai', icon:'🧠', group:'Navigate', view:'moirai' },
   { id:'go-goals', label:'Go to Goals', icon:'🎯', group:'Navigate', view:'goals' },
   { id:'go-agents', label:'Go to Agents', icon:'🤖', group:'Navigate', view:'agents' },
   { id:'go-projects', label:'Go to Projects', icon:'📁', group:'Navigate', view:'projects' },

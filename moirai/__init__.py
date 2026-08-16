@@ -1,7 +1,7 @@
 """
-Jarvis — Conversational Intelligence Layer for MoiraiCore
+Moirai — Conversational Intelligence Layer for MoiraiCore
 
-A general-purpose "Jarvis-style" brain that provides:
+A general-purpose "Moirai-style" brain that provides:
   - Configurable personality (tone, formality, humor)
   - Conversation memory across sessions (SQLite-backed)
   - Proactive context awareness (time, activity, goals)
@@ -12,14 +12,14 @@ This module is hotel-agnostic. Hotel-specific features layer on top.
 
 from pathlib import Path
 
-JARVIS_DIR = Path(__file__).parent
-CONVERSATIONS_DB = JARVIS_DIR / "jarvis_conversations.db"
+MOIRAI_DIR = Path(__file__).parent
+CONVERSATIONS_DB = MOIRAI_DIR / "moirai_conversations.db"
 
 # ── Personality Presets ──
 
 PERSONALITIES = {
     "professional": {
-        "name": "Jarvis",
+        "name": "Moirai",
         "tone": "professional and concise",
         "formality": "high",
         "humor": "none",
@@ -27,7 +27,7 @@ PERSONALITIES = {
         "response_length": "brief",
     },
     "friendly": {
-        "name": "Jarvis",
+        "name": "Moirai",
         "tone": "warm and friendly",
         "formality": "medium",
         "humor": "light",
@@ -35,7 +35,7 @@ PERSONALITIES = {
         "response_length": "conversational",
     },
     "concierge": {
-        "name": "Jarvis",
+        "name": "Moirai",
         "tone": "attentive and helpful",
         "formality": "medium-high",
         "humor": "subtle",
@@ -43,7 +43,7 @@ PERSONALITIES = {
         "response_length": "detailed",
     },
     "witty": {
-        "name": "Jarvis",
+        "name": "Moirai",
         "tone": "clever and engaging",
         "formality": "medium",
         "humor": "frequent",
@@ -55,8 +55,8 @@ PERSONALITIES = {
 # ── Knowledge Base Paths ──
 
 KNOWLEDGE_BASE_PATHS = {
-    "faq": JARVIS_DIR / "knowledge" / "faq.md",
-    "policies": JARVIS_DIR / "knowledge" / "policies.md",
-    "local": JARVIS_DIR / "knowledge" / "local_attractions.md",
-    "services": JARVIS_DIR / "knowledge" / "hotel_services.md",
+    "faq": MOIRAI_DIR / "knowledge" / "faq.md",
+    "policies": MOIRAI_DIR / "knowledge" / "policies.md",
+    "local": MOIRAI_DIR / "knowledge" / "local_attractions.md",
+    "services": MOIRAI_DIR / "knowledge" / "hotel_services.md",
 }

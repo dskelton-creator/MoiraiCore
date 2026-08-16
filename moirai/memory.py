@@ -17,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-from jarvis import CONVERSATIONS_DB
+from moirai import CONVERSATIONS_DB
 
 
 class ConversationMemory:
