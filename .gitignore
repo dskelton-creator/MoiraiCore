@@ -48,3 +48,10 @@ data/scrumgate_audit.jsonl
 
 # Runtime dirs auto-created by module imports (secrets/state live here)
 config/
+
+# Project spaces and workspace (generated at runtime)
+projects/
+workspace/
+
+# Marketing artifacts (auto-generated)
+marketing/HOMEPAGE_REPORT.md

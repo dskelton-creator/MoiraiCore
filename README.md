@@ -19,20 +19,26 @@ Everything runs on your machine. Your data never leaves it.
 
 ## Quick Start
 
-```bash
-# 1. Install dependencies
-pip install -r requirements.txt
+> **Prerequisite:** MoiraiCore depends on [Hermes Agent](https://github.com/NousResearch/hermes-agent) for model execution (the Tier 1 director and task agents). Install Hermes first: `curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash`
 
-# 2. Configure a Tier 2 model backend (OpenAI-compatible via OpenRouter)
+```bash
+# 1. Create a virtual environment and install dependencies
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .          # or: pip install -r requirements.txt
+
+# 2. Configure the Tier 2 model backend (OpenAI-compatible via OpenRouter)
 export OPENROUTER_API_KEY=sk-or-...        # Tier 2 (architect)
 #   optional Gemini fallback:
 #   export TIER2_PROVIDER=gemini
 #   export GEMINI_API_KEY=...
 
 # 3. Start the server
-python3 scripts/server.py --port 7878
-# open http://localhost:7878
+python3 scripts/server.py --port 7879
+# open http://localhost:7879
 ```
+
+> **Note:** MoiraiCore runs on port **7879** (Hagent OS uses 7878). The command-line `hermes` binary must be on your PATH for the goal engine's Tier 1 orchestration.
 
 ### First-run setup (onboarding wizard)
 
