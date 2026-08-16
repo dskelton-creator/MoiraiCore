@@ -80,17 +80,27 @@ def get_ice():
 def ensure_dirs():
     CONVERSATIONS_DIR.mkdir(parents=True, exist_ok=True)
 
-def run_hermes(args: list[str], timeout: int = 600) -> dict:
-    """Run a Hermes CLI command and return parsed result. Timer starts before call."""
+def run_hermes(args: list[str], timeout: int = 600, workdir: str = None) -> dict:
+    """Run a Hermes CLI command and return parsed result. Timer starts before call.
+
+    workdir: optional working directory. When set, both the subprocess cwd and
+    the deprecated TERMINAL_CWD env var are pointed there so the agent's
+    terminal backend follows the requested directory (the --in flag alone only
+    scopes the session, not the terminal backend).
+    """
     cmd = [HERMES_CLI] + args
     start = time.time()
+    env = {**os.environ}
+    if workdir:
+        env["TERMINAL_CWD"] = workdir
     try:
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
             timeout=timeout,
-            env={**os.environ},
+            env=env,
+            cwd=workdir or None,
         )
         duration_ms = int((time.time() - start) * 1000)
         stdout = result.stdout.strip()

@@ -840,7 +840,7 @@ class GoalEngine:
             base_args = ["chat", "-q", prompt, "--quiet", "--pass-session-id", "--max-turns", "10", "--in", workdir] + _tier1_model_args()
             args = build_resume_args(base_args, session_id)
 
-            result = run_hermes(args, timeout=600)
+            result = run_hermes(args, timeout=600, workdir=workdir)
 
             # Save output
             RUNS_DIR.mkdir(parents=True, exist_ok=True)
