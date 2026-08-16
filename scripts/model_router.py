@@ -85,6 +85,71 @@ TASK_TIER_MAP = {
 }
 
 
+# Natural-language descriptions for each task type, used by the embedding
+# classifier to semantically match task descriptions against known types.
+# Kept token-lean; each description is a phrase-length summary.
+TASK_TYPE_DESCRIPTIONS = {
+    TaskType.BACKLOG_MANAGEMENT: "manage the backlog, organize tasks, prioritize and reorder work items, sort and filter the task list",
+    TaskType.GOAL_CREATION: "create a new goal or milestone, define objectives, set targets, establish a new objective",
+    TaskType.GOAL_DECOMPOSE: "decompose a goal into subtasks, break down work into smaller pieces, split a large task",
+    TaskType.STATE_UPDATE: "update task or project state, change status, update progress tracking",
+    TaskType.PROJECT_SETUP: "set up a new project, scaffold a workspace, initialize project structure and configuration",
+    TaskType.TASK_ROUTING: "route a task to an agent, assign work, determine which worker or agent should handle a task",
+    TaskType.CODE_GENERATION: "generate new code, build a feature, implement functionality, create a module or function",
+    TaskType.CODE_REFACTOR: "refactor existing code, improve code structure, clean up and reorganize for better design",
+    TaskType.RESEARCH: "research a topic, investigate and analyze, gather information, explore and find answers",
+    TaskType.DESIGN_DECISION: "make a design decision, choose an architecture pattern or approach, decide on a design",
+    TaskType.ARTIFACT_GENERATION: "generate an artifact or document, produce a plan or deliverable, create a specification",
+    TaskType.ARCHITECTURE: "design system architecture, create blueprints, define high-level structure and components",
+    TaskType.BUG_FIX: "fix a bug or error, resolve broken behavior, repair a defect, correct a malfunction",
+    TaskType.TEST_FIX: "fix a failing test, repair test code, make tests pass, correct test assertions",
+    TaskType.SYNTAX_FIX: "fix a syntax error, correct indentation or formatting, repair parsing errors",
+    TaskType.IMPORT_FIX: "fix a broken import, resolve missing module references, repair dependency imports",
+    TaskType.SINGLE_FILE_EDIT: "edit a single file, make a small focused change to one file or one function",
+    TaskType.TEST_EXECUTION: "run tests, execute the test suite, check test results, validate code via testing",
+}
+
+# Minimum cosine score to accept an embedding classification.
+# TF-IDF produces sparse vectors with low scores (~0.2-0.5 for good matches);
+# below this the match is likely word-overlap noise, so the keyword fallback
+# takes over. Ollama embeddings (SEMANTIC_BACKEND=ollama) are the recommended
+# backend — they score much higher and capture real semantics.
+_EMBED_MIN_CONFIDENCE = 0.15
+
+# Minimum margin ratio between top and second-best embedding score.  Prevents
+# accepting a match when two unrelated types score similarly due to shared
+# filler words (TF-IDF "the" / "and" noise). 1.5 = top must beat 2nd by 50%.
+_EMBED_MIN_MARGIN = 1.25
+
+
+def _classify_embedding(description: str) -> tuple[TaskType, float] | None:
+    """Classify via semantic embedding matching against TASK_TYPE_DESCRIPTIONS.
+
+    Uses semantic_search (TF-IDF by default, Ollama embeddings when
+    SEMANTIC_BACKEND=ollama). Returns (task_type, confidence) or None when
+    the match is ambiguous or the backend is unavailable — the caller must
+    fall back to keyword matching.
+    """
+    try:
+        from semantic_search import semantic_search
+        docs = [
+            {"id": tt.value, "name": tt.value, "content": desc,
+             "folder": "", "path": tt.value, "size": len(desc)}
+            for tt, desc in TASK_TYPE_DESCRIPTIONS.items()
+        ]
+        results = semantic_search(description, docs, top_k=2)
+        if not results or results[0]["score"] <= 0:
+            return None
+        top = results[0]["score"]
+        second = results[1]["score"] if len(results) > 1 else 0.0
+        if top >= _EMBED_MIN_CONFIDENCE and (second == 0.0 or top / second >= _EMBED_MIN_MARGIN):
+            task_type = TaskType(results[0]["id"])
+            return task_type, top
+    except Exception:
+        pass
+    return None
+
+
 @dataclass
 class RoutingDecision:
     """Result of routing a task to a tier."""
@@ -141,9 +206,22 @@ def _reasoning_effort_for(task_type: TaskType) -> str:
 
 def classify_task(description: str, context: dict = None) -> TaskType:
     """
-    Classify a task description into a TaskType using keyword matching.
-    In production, this could use an LLM classifier.
+    Classify a task description into a TaskType.
+
+    Strategy ("don't classify, hallucinate — then match"): try semantic
+    embedding matching first (robust to paraphrase/synonym), then fall back to
+    keyword matching. Both are offline-safe; the embedding path degrades to the
+    keyword path on any failure or low confidence.
     """
+    emb = _classify_embedding(description)
+    if emb is not None and emb[1] >= _EMBED_MIN_CONFIDENCE:
+        return emb[0]
+
+    return _classify_keyword(description, context)
+
+
+def _classify_keyword(description: str, context: dict = None) -> TaskType:
+    """Keyword-matching classifier (fast, offline fallback)."""
     desc_lower = description.lower()
     context = context or {}
 
