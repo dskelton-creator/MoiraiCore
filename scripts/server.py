@@ -2219,6 +2219,33 @@ class Handler(http.server.BaseHTTPRequestHandler):
             _json(self, result)
             return
 
+        if p.path == "/api/entities":
+            # List all distinct entity refs with snapshot counts
+            try:
+                v = vault()
+                entities = v.list_entities()
+                _json(self, {"ok": True, "entities": entities})
+            except Exception as e:
+                _json(self, {"ok": False, "error": str(e)})
+            return
+
+        if p.path == "/api/entities/timeline":
+            # Timeline for a specific entity ref (?ref=...)
+            try:
+                qs = parse_qs(p.query)
+                ref = qs.get("ref", [""])[0]
+                if not ref:
+                    _json(self, {"ok": False, "error": "Missing ?ref= parameter"})
+                    return
+                v = vault()
+                timeline = v.get_entity_timeline(ref)
+                state, task_id, updated_at = v.get_entity_state(ref)
+                _json(self, {"ok": True, "ref": ref, "timeline": timeline,
+                             "latest": state, "latest_task": task_id, "latest_at": updated_at})
+            except Exception as e:
+                _json(self, {"ok": False, "error": str(e)})
+            return
+
         if p.path == "/api/logs":
             log_dir = Path.home() / ".hermes" / "logs"
             gateway_log = log_dir / "gateway.log"

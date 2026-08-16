@@ -1111,6 +1111,22 @@ class VaultIndex:
         except Exception:
             return []
 
+    def list_entities(self):
+        """Return distinct entity refs with snapshot counts and last-seen
+        timestamps. Powers the dashboard Entity Timeline view."""
+        try:
+            conn = self._conn()
+            rows = conn.execute(
+                """SELECT entity_ref, COUNT(*) AS cnt, MAX(updated_at) AS last_seen
+                   FROM entity_states
+                   GROUP BY entity_ref
+                   ORDER BY last_seen DESC"""
+            ).fetchall()
+            conn.close()
+            return [dict(r) for r in rows]
+        except Exception:
+            return []
+
 
 # ── Convenience functions ────────────────────────────────────────────
 
