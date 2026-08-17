@@ -140,7 +140,7 @@ KANBAN_FILE = AGENT_OS_ROOT / "config" / "kanban.json"
 HERMES_BRIDGE = AGENT_OS_ROOT / "scripts" / "hermes_bridge.py"
 AGENT_REGISTRY_SCRIPT = AGENT_OS_ROOT / "scripts" / "agent_registry.py"
 
-def _run_hermes_bridge(args: list[str], timeout: int = 300) -> dict:
+def _run_hermes_bridge(args: list[str], timeout: int = 600) -> dict:
     """Run the Hermes bridge and return parsed JSON result."""
     try:
         r = subprocess.run(

@@ -141,13 +141,39 @@ class Moirai:
         if not route:
             args.remove("--log")
 
-        result = subprocess.run(
-            args,
-            capture_output=True,
-            text=True,
-            timeout=300,
-            env={**os.environ},
-        )
+        # Bridge timeout is 600s; engine timeout must be >= bridge + overhead.
+        TIMEOUT = 600
+
+        try:
+            result = subprocess.run(
+                args,
+                capture_output=True,
+                text=True,
+                timeout=TIMEOUT,
+                env={**os.environ},
+            )
+        except subprocess.TimeoutExpired as te:
+            # Hermes took too long — capture any partial output for diagnostics
+            partial_stdout = ""
+            partial_stderr = ""
+            if te.stdout:
+                partial_stdout = te.stdout[-2000:]
+            if te.stderr:
+                partial_stderr = te.stderr[-500:]
+            # Try to extract a partial response from the truncated JSON stdout
+            response = None
+            error = f"Hermes timed out after {TIMEOUT}s"
+            if partial_stdout:
+                response = partial_stdout
+            if partial_stderr:
+                error += f" | stderr: {partial_stderr.strip()}"
+            return {
+                "ok": False,
+                "response": response,
+                "error": error,
+                "routed_to": "hermes",
+                "agent_name": "Hermes",
+            }
 
         try:
             return json.loads(result.stdout)

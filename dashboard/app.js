@@ -3899,10 +3899,11 @@ async function moiraiSend() {
 
   try {
     // Client-side watchdog: bound the wait so the "working" indicator can
-    // never spin indefinitely. Generous (5 min) to allow long agentic runs;
-    // the server is now threaded so other requests aren't blocked meanwhile.
+    // never spin indefinitely. Generous (11 min) to allow long agentic runs;
+    // matches the backend engine timeout (600s) + bridge overhead, and the
+    // server is threaded so other requests aren't blocked meanwhile.
     const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-    const watchdog = controller ? setTimeout(() => controller.abort(), 300000) : null;
+    const watchdog = controller ? setTimeout(() => controller.abort(), 660000) : null;
     const result = await authFetch('/api/moirai/chat', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -3926,8 +3927,13 @@ async function moiraiSend() {
       const name = result.agent_name || 'Moirai';
       respDiv.innerHTML = '<div class="msg-avatar agent">🧠</div><div class="msg-content"><div class="msg-author agent">' + name + '</div><div class="msg-text agent">' + result.response.replace(/</g,'&lt;').replace(/\n/g,'<br>') + '</div></div>';
     } else {
-      const errMsg = (result && result.error) || 'No response';
-      respDiv.innerHTML = '<div class="msg-avatar agent">⚠️</div><div class="msg-content"><div class="msg-author agent">Error</div><div class="msg-text agent">' + errMsg + '</div></div>';
+      let errMsg = (result && result.error) || 'No response';
+      // The backend stores the user message even on failure, so a blank
+      // response means Hermes was killed mid-run (e.g. timeout). Surface it.
+      if (errMsg === 'No response') {
+        errMsg = 'No response (Hermes may have timed out — check the terminal running MoiraiCore for details)';
+      }
+      respDiv.innerHTML = '<div class="msg-avatar agent">⚠️</div><div class="msg-content"><div class="msg-author agent">Error</div><div class="msg-text agent">' + errMsg.replace(/</g,'&lt;') + '</div></div>';
     }
     chat.appendChild(respDiv);
   } catch(e) {
