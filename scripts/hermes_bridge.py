@@ -30,6 +30,7 @@ import time
 import threading
 from pathlib import Path
 from datetime import datetime
+from typing import Optional
 
 HERMES_CLI = os.environ.get("HERMES_CLI", "")
 if not HERMES_CLI:
@@ -80,6 +81,45 @@ def get_ice():
 def ensure_dirs():
     CONVERSATIONS_DIR.mkdir(parents=True, exist_ok=True)
 
+
+def _hermes_state_db() -> Path:
+    """Locate Hermes' SQLite state database (holds session messages)."""
+    home = os.environ.get("HERMES_HOME") or os.path.join(os.path.expanduser("~"), ".hermes")
+    return Path(home) / "state.db"
+
+
+def _read_clean_response(session_id: str) -> Optional[str]:
+    """Read the final assistant message for a Hermes session from state.db.
+
+    The CLI's --quiet mode still prints inline tool diffs ("┊ review diff" …)
+    to stdout alongside the final response. Reading the session's last
+    assistant message from the state DB gives us the clean, human-readable
+    answer without that noise.
+    """
+    if not session_id:
+        return None
+    try:
+        import sqlite3
+        db = _hermes_state_db()
+        if not db.exists():
+            return None
+        conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+        try:
+            row = conn.execute(
+                "SELECT content FROM messages WHERE session_id = ? "
+                "AND role = 'assistant' AND content IS NOT NULL AND content != '' "
+                "ORDER BY id DESC LIMIT 1",
+                (session_id,),
+            ).fetchone()
+            if row and row[0]:
+                return row[0].strip()
+            return None
+        finally:
+            conn.close()
+    except Exception:
+        return None
+
+
 def run_hermes(args: list[str], timeout: int = 600, workdir: str = None) -> dict:
     """Run a Hermes CLI command and return parsed result. Timer starts before call.
 
@@ -108,10 +148,20 @@ def run_hermes(args: list[str], timeout: int = 600, workdir: str = None) -> dict
 
         session_id = None
         m = re.search(r"session_id:\s*(\S+)", stdout)
+        if not m and stderr:
+            m = re.search(r"session_id:\s*(\S+)", stderr)
         if m:
             session_id = m.group(1)
 
         response_text = re.sub(r"session_id:\s*\S+\n?", "", stdout).strip()
+
+        # Prefer the clean final assistant message from the session DB; fall
+        # back to raw stdout when that's unavailable (e.g. session not yet
+        # committed, or the model replied directly without tool noise).
+        if result.returncode == 0 and session_id:
+            clean = _read_clean_response(session_id)
+            if clean:
+                response_text = clean
 
         return {
             "ok": result.returncode == 0,
