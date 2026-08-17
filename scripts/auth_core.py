@@ -23,7 +23,7 @@ AUTH_LOG = AUTH_DIR / "auth.log"
 JWT_SECRET_FILE = AUTH_DIR / ".jwt_secret"
 
 JWT_ALGORITHM = "HS256"
-ACCESS_TOKEN_TTL = 3600       # 1 hour
+ACCESS_TOKEN_TTL = 86400       # 24 hours
 REFRESH_TOKEN_TTL = 86400 * 7 # 7 days
 AUTH_CODE_TTL = 600            # 10 min
 MAX_LOGIN_ATTEMPTS = 5
