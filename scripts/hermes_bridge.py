@@ -163,6 +163,19 @@ def run_hermes(args: list[str], timeout: int = 600, workdir: str = None) -> dict
             if clean:
                 response_text = clean
 
+        # The CLI exited 0 but produced no answer (model transient failure /
+        # empty reply). Surface a clear error so the caller never shows a
+        # misleading blank "No response".
+        if result.returncode == 0 and not response_text:
+            return {
+                "ok": False,
+                "session_id": session_id,
+                "response": None,
+                "error": "Hermes returned an empty response (model may have stalled — try again or reduce the message size)",
+                "exit_code": result.returncode,
+                "duration_ms": duration_ms,
+            }
+
         return {
             "ok": result.returncode == 0,
             "session_id": session_id,

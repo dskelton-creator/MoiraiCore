@@ -3926,6 +3926,10 @@ async function moiraiSend() {
     if (result && result.response) {
       const name = result.agent_name || 'Moirai';
       respDiv.innerHTML = '<div class="msg-avatar agent">🧠</div><div class="msg-content"><div class="msg-author agent">' + name + '</div><div class="msg-text agent">' + result.response.replace(/</g,'&lt;').replace(/\n/g,'<br>') + '</div></div>';
+    } else if (!result) {
+      // authFetch returned null — the session expired and token refresh failed.
+      // The login screen is already shown; don't leave a misleading "No response".
+      respDiv.innerHTML = '<div class="msg-avatar agent">🔐</div><div class="msg-content"><div class="msg-author agent">Session expired</div><div class="msg-text agent">Your login session expired. Please log in again, then resend your message.</div></div>';
     } else {
       let errMsg = (result && result.error) || 'No response';
       // The backend stores the user message even on failure, so a blank
