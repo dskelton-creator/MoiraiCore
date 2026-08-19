@@ -42,8 +42,22 @@ TEST = 'python3 -c "from app import add; assert add(2,3)==5"'
 def test_config_defaults_use_tool_capable_model():
     c = harness_worker.PiConfig()
     assert c.provider == "ollama"
-    assert "Ornith" in c.model  # qwen2.5-coder:14b cannot drive pi
+    assert c.model == "qwen3:8b"  # tool-capable; qwen2.5-coder:14b cannot drive pi
     assert c.max_retries >= 1
+
+
+def test_effective_backend_and_from_env(monkeypatch):
+    monkeypatch.setattr(os, "environ", {**os.environ, "HAGENT_TIER3_BACKEND": "pi",
+                                        "HAGENT_TIER3_MODEL": "qwen3:14b",
+                                        "HAGENT_TIER3_TIMEOUT": "300"})
+    assert harness_worker.effective_backend() == "pi"
+    c = harness_worker.PiConfig.from_env()
+    assert c.model == "qwen3:14b"
+    assert c.per_iteration_timeout == 300
+    # default (no env) stays 'ollama'
+    monkeypatch.setattr(os, "environ", {k: v for k, v in os.environ.items()
+                                        if k != "HAGENT_TIER3_BACKEND"})
+    assert harness_worker.effective_backend() == "ollama"
 
 
 def test_file_not_found_returns_clean_failure(tmp_path):
@@ -130,3 +144,70 @@ def test_pi_timeout_is_surfaced(tmp_path, monkeypatch):
     res = harness_worker.execute_tier3(_task(proj, TEST))
     assert res.success is False
     assert "TIMEOUT" in res.terminated_reason
+
+
+def _ok_result(task):
+    from ollama_worker import ExecutionResult
+    r = ExecutionResult(task=task, success=True)
+    r.terminated_reason = "Test passed on iteration 1"
+    return r
+
+
+def test_scrum_gate_routes_to_pi_backend_when_env_set(tmp_path, monkeypatch):
+    import ollama_worker
+    import scrum_gate
+
+    proj = tmp_path / "sproj"
+    proj.mkdir()
+    (proj / "app.py").write_text(BAD)
+    monkeypatch.setattr(scrum_gate, "PROJECT_SPACE", proj)
+    monkeypatch.setenv("HAGENT_TIER3_BACKEND", "pi")
+
+    routed = {}
+
+    def fake_hw_exec(task, config):
+        routed["backend"] = "pi"
+        (proj / "app.py").write_text(GOOD)
+        return _ok_result(task)
+
+    def fake_oll_exec(task, config):
+        routed["backend"] = "ollama"  # must not be called
+        return None
+
+    monkeypatch.setattr(harness_worker, "execute_tier3", fake_hw_exec)
+    monkeypatch.setattr(ollama_worker, "execute_tier3", fake_oll_exec)
+
+    code, err = scrum_gate.generate_code_via_ollama("Fix add", "app.py")
+    assert routed.get("backend") == "pi"
+    assert err == ""
+    assert code == GOOD
+
+
+def test_scrum_gate_routes_to_ollama_backend_by_default(tmp_path, monkeypatch):
+    import ollama_worker
+    import scrum_gate
+
+    proj = tmp_path / "sproj2"
+    proj.mkdir()
+    (proj / "app.py").write_text(BAD)
+    monkeypatch.setattr(scrum_gate, "PROJECT_SPACE", proj)
+    monkeypatch.delenv("HAGENT_TIER3_BACKEND", raising=False)
+
+    routed = {}
+
+    def fake_hw_exec(task, config):
+        routed["backend"] = "pi"  # must not be called
+        return None
+
+    def fake_oll_exec(task, config):
+        routed["backend"] = "ollama"
+        (proj / "app.py").write_text(GOOD)
+        return _ok_result(task)
+
+    monkeypatch.setattr(harness_worker, "execute_tier3", fake_hw_exec)
+    monkeypatch.setattr(ollama_worker, "execute_tier3", fake_oll_exec)
+
+    code, err = scrum_gate.generate_code_via_ollama("Fix add", "app.py")
+    assert routed.get("backend") == "ollama"
+    assert err == ""
+    assert code == GOOD

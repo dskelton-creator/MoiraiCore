@@ -23,9 +23,7 @@ from ollama_worker import ExecutionTask  # noqa: E402
 
 
 def main() -> int:
-    model = os.environ.get(
-        "POC_MODEL", "hf.co/deepreinforce-ai/Ornith-1.0-9B-GGUF:Q4_K_M"
-    )
+    model = os.environ.get("POC_MODEL", "qwen3:8b")
     proj = tempfile.mkdtemp(prefix="poc_proj_")
     app = os.path.join(proj, "app.py")
     with open(app, "w") as fh:

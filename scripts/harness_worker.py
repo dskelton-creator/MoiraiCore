@@ -14,13 +14,13 @@ working unchanged: swap the import of execute_tier3 to point here.
 IMPORTANT — model requirement
 ------------------------------
 pi requires a model that exposes NATIVE `tool_calls` on Ollama's OpenAI-compatible
-endpoint. As of this PoC:
-  * hf.co/deepreinforce-ai/Ornith-1.0-9B-GGUF:Q4_K_M  -> native tool_calls: YES
-  * qwen2.5-coder:14b                                 -> native tool_calls: NO
+endpoint. Verified on this machine:
+  * qwen3:8b                                         -> native tool_calls: YES (default)
+  * hf.co/deepreinforce-ai/Ornith-1.0-9B-GGUF:Q4_K_M -> native tool_calls: YES
+  * qwen2.5-coder:14b                                -> native tool_calls: NO
     (it emits its tool invocation as TEXT inside a `<tools>...</tools>` block,
      so pi's openai-completions adapter never sees a tool call and executes
-     nothing). Do not use it to drive pi; swap to Ornith or a qwen3-family
-     tool-caller for agentic Tier 3 work.
+     nothing). Do not use it to drive pi.
 
 Enforces: iteration cap, loop detection, per-iteration timeout, test-driven success.
 """
@@ -51,13 +51,31 @@ class PiConfig:
     pi_bin: str = "pi"
     provider: str = "ollama"
     # Tool-capable local model. qwen2.5-coder:14b does NOT support native
-    # tool_calls on Ollama and cannot drive pi; Ornith-1.0-9B can.
-    model: str = "hf.co/deepreinforce-ai/Ornith-1.0-9B-GGUF:Q4_K_M"
+    # tool_calls on Ollama and cannot drive pi. qwen3:8b (and Ornith-1.0-9B)
+    # do. qwen3:8b is the default; override via HAGENT_TIER3_MODEL.
+    model: str = "qwen3:8b"
     max_retries: int = 3
     per_iteration_timeout: int = 240  # agent loop is slower than a single LLM call
     test_timeout: int = 60
     staging_keep: bool = False  # keep the staging dir for debugging
     extra_args: tuple = ()  # extra pi CLI flags, e.g. ("--thinking", "off")
+
+    @classmethod
+    def from_env(cls) -> "PiConfig":
+        """Build a PiConfig from env vars (HAGENT_TIER3_PROVIDER/MODEL)."""
+        return cls(
+            provider=os.environ.get("HAGENT_TIER3_PROVIDER", "ollama"),
+            model=os.environ.get("HAGENT_TIER3_MODEL", "qwen3:8b"),
+            max_retries=int(os.environ.get("HAGENT_TIER3_MAX_RETRIES", "3")),
+            per_iteration_timeout=int(
+                os.environ.get("HAGENT_TIER3_TIMEOUT", "240")
+            ),
+        )
+
+
+def effective_backend() -> str:
+    """Which Tier 3 backend to use: 'ollama' (default) or 'pi'."""
+    return os.environ.get("HAGENT_TIER3_BACKEND", "ollama").strip().lower()
 
 
 def _build_agent_prompt(task: ExecutionTask, previous_error: str = "") -> str:

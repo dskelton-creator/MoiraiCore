@@ -173,33 +173,21 @@ def generate_code_via_gemini(task_description: str, file_path: str,
 
 
 def generate_code_via_ollama(task_description: str, file_path: str,
-                               current_content: str = "",
-                               test_command: str = "echo no-test",
-                               context: str = "",
-                               max_iterations: int = 3) -> tuple[str, str]:
+                              current_content: str = "",
+                              test_command: str = "echo no-test",
+                              context: str = "",
+                              max_iterations: int = 3) -> tuple[str, str]:
     """
-    Generate code via Ollama/Ornith (Tier 3).
+    Generate code via Tier 3 (Ollama iterative loop, or the Pi agent harness).
+
+    Backend selected by HAGENT_TIER3_BACKEND (default 'ollama'; set 'pi' to
+    route through the Pi harness with a native tool-calling model such as
+    qwen3:8b). docs/harness_worker.py documents the Pi backend.
 
     Returns (generated_code, error_message).
     """
     try:
-        from ollama_worker import execute_tier3, ExecutionTask, OllamaConfig
-
-        config = OllamaConfig()
-        config.per_iteration_timeout = 60
-        config.max_retries = max_iterations
-
-        prompt = (
-            f"{_WORKING_METHOD}\n\n"
-            f"## Task\n{task_description}\n\n"
-            f"## File to modify\n`{file_path}`\n"
-        )
-        if current_content:
-            prompt += f"\n## Current file content\n```\n{current_content}\n```\n"
-        if context:
-            prompt += f"\n## Context\n{context}\n"
-        prompt += f"\n## Test command\n`{test_command}`\n"
-        prompt += "\nOutput the complete fixed file content for `{file_path}`:"
+        from ollama_worker import ExecutionTask
 
         task = ExecutionTask(
             file_path=file_path,
@@ -209,15 +197,32 @@ def generate_code_via_ollama(task_description: str, file_path: str,
             context=context,
         )
 
-        result = execute_tier3(task, config)
+        backend = os.environ.get("HAGENT_TIER3_BACKEND", "ollama").strip().lower()
+        if backend == "pi":
+            import harness_worker as hw
+
+            config = hw.PiConfig.from_env()
+            config.max_retries = max_iterations
+            result = hw.execute_tier3(task, config)
+        else:
+            from ollama_worker import execute_tier3, OllamaConfig
+
+            config = OllamaConfig()
+            config.per_iteration_timeout = 60
+            config.max_retries = max_iterations
+            result = execute_tier3(task, config)
 
         if result.success:
-            code = (PROJECT_SPACE / file_path).read_text() if (PROJECT_SPACE / file_path).exists() else ""
+            code = (
+                (PROJECT_SPACE / file_path).read_text()
+                if (PROJECT_SPACE / file_path).exists()
+                else ""
+            )
             return code, ""
         return "", result.terminated_reason
 
     except Exception as e:
-        return "", f"Ollama error: {e}"
+        return "", f"Tier3 error: {e}"
 
 
 # ── Merge Queue Pipeline ──
