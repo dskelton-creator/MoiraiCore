@@ -34,6 +34,7 @@ import subprocess
 import tempfile
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 from ollama_worker import (
     ExecutionResult,
@@ -76,6 +77,48 @@ class PiConfig:
 def effective_backend() -> str:
     """Which Tier 3 backend to use: 'ollama' (default) or 'pi'."""
     return os.environ.get("HAGENT_TIER3_BACKEND", "ollama").strip().lower()
+
+
+def discover_test_command(project_space: str, file_path: str) -> str:
+    """
+    Return a REAL test command covering `file_path` inside `project_space`, or
+    the 'echo no-test' placeholder if none can be found. Used so Tier 3 tasks
+    (both backends) actually verify against a test instead of a no-op gate.
+
+    Resolution order:
+      1. a co-located pytest file for the module (tests/, test/, or alongside)
+      2. an import smoke test for a Python module
+      3. the 'echo no-test' placeholder
+    """
+    ps = Path(project_space)
+    f = Path(file_path)
+    name = f.stem
+
+    search_dirs = [ps / "tests", ps / "test", ps]
+    patterns = (f"test_{f.name}", f"{name}_test.py", f"test_{name}.py")
+    for d in search_dirs:
+        if not d.exists():
+            continue
+        for pat in patterns:
+            cand = d / pat
+            if cand.exists():
+                try:
+                    rel = str(cand.relative_to(ps))
+                except ValueError:
+                    rel = str(cand)
+                return f"python3 -m pytest {rel} -q"
+
+    if f.suffix.lower() == ".py" and name.isidentifier():
+        return f"python3 -c \"import {name}; print('smoke ok')\""
+
+    return "echo no-test"
+
+
+def _is_placeholder(test_command: str) -> bool:
+    return (
+        not test_command
+        or test_command.strip().lower() in ("echo no-test", "no-test")
+    )
 
 
 def _build_agent_prompt(task: ExecutionTask, previous_error: str = "") -> str:

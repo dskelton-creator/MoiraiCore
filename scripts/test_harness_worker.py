@@ -211,3 +211,71 @@ def test_scrum_gate_routes_to_ollama_backend_by_default(tmp_path, monkeypatch):
     assert routed.get("backend") == "ollama"
     assert err == ""
     assert code == GOOD
+
+
+# ── real test-command discovery (the follow-up threading) ──
+
+def test_discover_test_command_finds_pytest_file(tmp_path):
+    proj = tmp_path / "p2"
+    proj.mkdir()
+    (proj / "app.py").write_text("x = 1\n")
+    (proj / "tests").mkdir()
+    (proj / "tests" / "test_app.py").write_text("def test_x():\n    assert True\n")
+    cmd = harness_worker.discover_test_command(str(proj), "app.py")
+    assert "pytest" in cmd and "test_app.py" in cmd
+
+
+def test_discover_test_command_import_smoke_fallback(tmp_path):
+    proj = tmp_path / "p3"
+    proj.mkdir()
+    (proj / "utils.py").write_text("def f():\n    return 1\n")
+    cmd = harness_worker.discover_test_command(str(proj), "utils.py")
+    assert cmd.startswith("python3 -c")
+    assert "import utils" in cmd
+
+
+def test_discover_test_command_placeholder_when_nothing(tmp_path):
+    proj = tmp_path / "p4"
+    proj.mkdir()
+    (proj / "data.json").write_text("{}")
+    assert harness_worker.discover_test_command(str(proj), "data.json") == "echo no-test"
+
+
+def _capture_task_exec(proj, monkeypatch, expected_substr):
+    """Run generate_code_via_ollama w/o a test command and capture the task's."""
+    import ollama_worker
+    import scrum_gate
+
+    monkeypatch.setattr(scrum_gate, "PROJECT_SPACE", proj)
+    monkeypatch.delenv("HAGENT_TIER3_BACKEND", raising=False)
+
+    seen = {}
+
+    def fake_oll_exec(task, config):
+        seen["tc"] = task.test_command
+        app = proj / task.file_path
+        if app.exists():
+            app.write_text(GOOD)
+        return _ok_result(task)
+
+    monkeypatch.setattr(ollama_worker, "execute_tier3", fake_oll_exec)
+    code, err = scrum_gate.generate_code_via_ollama("Fix add", "app.py")
+    assert err == ""
+    assert code == GOOD
+    assert expected_substr in seen["tc"]
+
+
+def test_scrum_gate_replaces_default_test_placeholder(tmp_path, monkeypatch):
+    proj = tmp_path / "sproj3"
+    proj.mkdir()
+    (proj / "app.py").write_text(BAD)
+    (proj / "tests").mkdir()
+    (proj / "tests" / "test_app.py").write_text("def test_x():\n    assert True\n")
+    _capture_task_exec(proj, monkeypatch, "test_app.py")
+
+
+def test_scrum_gate_placeholder_becomes_import_smoke(tmp_path, monkeypatch):
+    proj = tmp_path / "sproj4"
+    proj.mkdir()
+    (proj / "app.py").write_text(BAD)  # no tests dir
+    _capture_task_exec(proj, monkeypatch, "import app")

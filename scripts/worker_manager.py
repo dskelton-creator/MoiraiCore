@@ -445,7 +445,10 @@ class WorkerManager:
             if command == "execute_task":
                 task = (payload or {}).get("task", "")
                 file_path = (payload or {}).get("file_path", "")
-                result = self._execute_task_in_process(project_name, task, file_path)
+                test_command = (payload or {}).get("test_command", "")
+                result = self._execute_task_in_process(
+                    project_name, task, file_path, test_command
+                )
             elif command == "run_python":
                 code = (payload or {}).get("code", "")
                 result = self._run_python_in_process(code)
@@ -459,7 +462,7 @@ class WorkerManager:
             os.chdir(old_cwd)
 
     def _execute_task_in_process(self, project_name: str, task: str,
-                                  file_path: str) -> dict:
+                                  file_path: str, test_command: str = "") -> dict:
         """Execute a task in-process (fallback path)."""
         try:
             sys.path.insert(0, str(AGENT_OS_ROOT / "scripts"))
@@ -467,7 +470,8 @@ class WorkerManager:
             # Try Gemini first, fall back to Ollama
             code, error = generate_code_via_gemini(task, file_path)
             if error:
-                code, error = generate_code_via_ollama(task, file_path)
+                code, error = generate_code_via_ollama(task, file_path,
+                                                       test_command=test_command)
             if error:
                 return {"error": error}
             return {"code": code, "task": task, "file_path": file_path}

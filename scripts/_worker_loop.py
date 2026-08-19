@@ -71,6 +71,7 @@ def handle_command(cmd_id: str, command: str, payload: dict):
         elif command == "execute_task":
             task = payload.get("task", "")
             file_path = payload.get("file_path", "")
+            test_command = payload.get("test_command", "")
             project_space = payload.get("project_space", os.getcwd())
 
             # Add project space to path
@@ -82,8 +83,10 @@ def handle_command(cmd_id: str, command: str, payload: dict):
                 code, error = generate_code_via_gemini(task, file_path,
                                                         context=project_space)
                 if error:
-                    code, error = generate_code_via_ollama(task, file_path,
-                                                            context=project_space)
+                    code, error = generate_code_via_ollama(
+                        task, file_path, test_command=test_command,
+                        context=project_space,
+                    )
                 if error:
                     send_error(cmd_id, f"Task execution error: {error}")
                 else:

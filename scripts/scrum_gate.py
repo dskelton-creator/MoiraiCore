@@ -188,6 +188,13 @@ def generate_code_via_ollama(task_description: str, file_path: str,
     """
     try:
         from ollama_worker import ExecutionTask
+        from harness_worker import _is_placeholder, discover_test_command
+
+        # Real test-verified gate: when the caller didn't supply a test command,
+        # discover a real one (pytest file, else import smoke) instead of the
+        # silent 'echo no-test' placeholder. Applies to BOTH backends.
+        if _is_placeholder(test_command):
+            test_command = discover_test_command(str(PROJECT_SPACE), file_path)
 
         task = ExecutionTask(
             file_path=file_path,
