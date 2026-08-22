@@ -288,7 +288,10 @@ def route_task(description: str, context: dict = None) -> RoutingDecision:
     engine_map = {
         Tier.TIER_1_DIRECTOR: "deepseek/deepseek-v4-pro",
         Tier.TIER_2_ARCHITECT: "gemini-3.1-pro",
-        Tier.TIER_3_BUILDER: "qwen2.5-coder:14b",
+        # Display/routing label only — the live backend is chosen by
+        # HAGENT_TIER3_BACKEND (ollama | pi). Kept in sync with tier3_manager's
+        # Pi-harness default so the dashboard doesn't show a drifted model.
+        Tier.TIER_3_BUILDER: "qwen3:8b",
     }
 
     confidence = 0.8 if task_type in TASK_TIER_MAP else 0.5

@@ -201,12 +201,38 @@ class ScrumMaster:
             pass
 
     def _warm_model(self):
-        """Warm the Ollama model in a background thread."""
-        try:
-            from ollama_worker import OllamaConfig, warm_ollama
+        """Warm the active Tier 3 model in a background thread.
 
-            config = OllamaConfig()
-            threading.Thread(target=warm_ollama, args=(config,), daemon=True).start()
+        Respects HAGENT_TIER3_BACKEND: 'pi' harness runs qwen3:8b via Ollama's
+        OpenAI endpoint, so warm that; only warm the legacy ollama_worker
+        default when the backend is actually ollama. Never warms a model that
+        isn't going to be used (24GB RAM budget matters).
+        """
+        try:
+            if os.environ.get("HAGENT_TIER3_BACKEND", "ollama") == "pi":
+                from tier3_manager import get_config
+                cfg = get_config()
+                model = cfg.get("ollama_worker_model") or "qwen3:8b"
+                threading.Thread(
+                    target=self._warm_ollama_model, args=(model,), daemon=True
+                ).start()
+            else:
+                from ollama_worker import OllamaConfig, warm_ollama
+                config = OllamaConfig()
+                threading.Thread(target=warm_ollama, args=(config,), daemon=True).start()
+        except Exception:
+            pass
+
+    def _warm_ollama_model(self, model_name: str):
+        """Best-effort keep-alive load of a specific Ollama model."""
+        try:
+            import urllib.request
+            req = urllib.request.Request(
+                "http://localhost:11434/api/generate",
+                data=json.dumps({"model": model_name, "keep_alive": "30m"}).encode(),
+                headers={"Content-Type": "application/json"},
+            )
+            urllib.request.urlopen(req, timeout=120).read()
         except Exception:
             pass
 
@@ -330,6 +356,93 @@ class ScrumMaster:
         except ImportError:
             pass
         return task
+
+    # ── Dynamic Agent Creation (Tier 1 capability) ────────────────────────
+
+    def create_specialist_agent(self, key: str, name: str = "", role: str = "",
+                                skills: list[str] | None = None,
+                                triggers: list[str] | None = None,
+                                memory_folder: str | None = None) -> dict:
+        """Spawn a NEW specialist agent into the shared AgentRegistry.
+
+        This is the Tier 1 Scrum Master's ability to grow its own workforce:
+        when the project requires a skill no existing agent covers (e.g.
+        'security review', 'data migration'), Tier 1 registers a specialist
+        that persists in config/agents.override.json across restarts. The
+        orchestrator's trigger-based router picks it up immediately for
+        future matching tasks.
+
+        Returns {'ok': True, 'agent': <summary>} or {'ok': False, 'error': ...}.
+        Never raises — staffing problems must not break the pipeline.
+        """
+        key = (key or "").lower().strip()
+        if not key:
+            return {"ok": False, "error": "agent key is required"}
+        try:
+            sys.path.insert(0, str(AGENT_OS_ROOT / "scripts"))
+            from agent_registry import get_registry
+            definition = {
+                "key": key,
+                "name": name or key.title(),
+                "role": role or f"Specialist ({', '.join(skills or []) or 'general'})",
+                "emoji": "🧩",
+                "status": "active",
+                "model": "",
+                "description": role or f"Specialist agent spawned by Tier 1 for project {self.project_name}",
+                "skills": skills or [],
+                "toolsets": [],
+                "triggers": triggers or [],
+            }
+            if memory_folder:
+                definition["memory_folder"] = memory_folder
+            saved = get_registry().save_agent(key, definition)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+        # Audit log (best-effort)
+        try:
+            from audit import audit_log
+            audit_log("agent.spawn_specialist", status="success",
+                      details={"key": key, "project": self.project_name})
+        except Exception:
+            pass
+
+        self._emit("Scrum Master",
+                   f"🧩 Spawned specialist agent '{saved.get('name', key)}' "
+                   f"({definition['role']}) for project needs")
+        return {"ok": True, "agent": saved}
+
+    def ensure_specialist_for_task(self, task: "Task", skill: str,
+                                   trigger_words: list[str] | None = None) -> dict:
+        """Idempotently ensure a specialist exists for a named skill.
+
+        Reuses an existing active agent whose key/triggers cover the skill;
+        otherwise spawns one via create_specialist_agent(). Intended to be
+        called by Tier 1 during decomposition or after a failed evaluation
+        cites a missing capability.
+        """
+        skill_key = "".join(c if c.isalnum() else "-" for c in skill.lower()).strip("-")
+        try:
+            sys.path.insert(0, str(AGENT_OS_ROOT / "scripts"))
+            from agent_registry import get_registry
+            reg = get_registry()
+            needle = skill.lower()
+            for summary in reg.list_agents(status_filter="active"):
+                trig = [t.lower() for t in (summary.get("triggers") or [])]
+                if needle in (summary.get("key") or "").lower() or any(needle in t for t in trig):
+                    return {"ok": True, "agent": summary, "created": False}
+        except Exception:
+            pass
+        result = self.create_specialist_agent(
+            key=f"{skill_key}-specialist"[:64],
+            name=f"{skill.title()} Specialist",
+            role=f"{skill.title()} specialist for {self.project_name}",
+            skills=[skill],
+            triggers=trigger_words or [skill.lower()],
+            memory_folder=f"agents/{skill_key}",
+        )
+        result["created"] = result.get("ok", False)
+        return result
 
     def _find_task(self, task_id: str) -> Optional[Task]:
         """Find a task by ID in backlog or completed."""
