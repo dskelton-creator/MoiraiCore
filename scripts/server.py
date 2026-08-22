@@ -3124,7 +3124,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
             ollama_config = OllamaConfig(
                 base_url=worker_config.get("base_url", "http://localhost:11434/v1"),
-                model_name=worker_config.get("model_name", "qwen2.5-coder:14b"),
+                model_name=worker_config.get("model_name", "qwen3-coder:30b-t3"),
                 max_retries=worker_config.get("max_retries", 5),
                 per_iteration_timeout=worker_config.get("per_iteration_timeout", 60),
             )
