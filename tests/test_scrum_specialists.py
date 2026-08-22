@@ -63,3 +63,67 @@ class TestCreateSpecialistAgent:
         result = _sm().ensure_specialist_for_task(None, "code")
         if result["ok"] and not result.get("created", True):
             assert result["agent"]["key"] != "code-specialist"
+
+
+class TestSpecialistExecution:
+    """Tier 2 specialist execution inside the scrum pipeline."""
+
+    def _backlog_task(self, sm):
+        sm.set_goal("test goal")
+        sm.decompose_backlog(task_descriptions=[
+            {"title": "Security design", "description": "Design auth flow",
+             "tier": 2, "priority": 0, "dependencies": []}])
+        return sm.backlog[0]
+
+    def teardown_method(self):
+        try:
+            get_registry().delete_agent("sec-review")
+        except Exception:
+            pass
+
+    def test_assign_task_to_agent_sets_key_and_validates(self):
+        from scrum_master import TaskStatus
+        sm = _sm()
+        task = self._backlog_task(sm)
+        sm.create_specialist_agent(key="sec-review", name="Sec Reviewer",
+                                   role="security", triggers=["security"])
+        t = sm.assign_task_to_agent(task.id, "sec-review")
+        assert t.agent_key == "sec-review"
+        assert t.status == TaskStatus.ASSIGNED
+        # unknown agent must raise
+        try:
+            sm.assign_task_to_agent("task-999", "nope")
+            assert False, "should have raised"
+        except ValueError:
+            pass
+        get_registry().delete_agent("sec-review")
+
+    def test_specialist_dispatch_used_when_agent_key_set(self, monkeypatch):
+        from scrum_master import Tier
+        sm = _sm()
+        task = self._backlog_task(sm)
+        task.status = __import__("scrum_master").TaskStatus.ASSIGNED
+        task.agent_key = "sec-review"
+
+        calls = {}
+        monkeypatch.setattr(sm, "_generate_specialist_artifact",
+                            lambda t: calls.setdefault("used", t.agent_key) or "# plan")
+        monkeypatch.setattr(sm, "evaluate_task", lambda tid, **kw: {"result": "PASS"})
+        monkeypatch.setattr(sm, "submit_artifact", lambda *a, **k: None)
+        sm._execute_assigned_task(task)
+        assert calls.get("used") == "sec-review", "specialist path should be used"
+
+    def test_generate_specialist_artifact_falls_back(self):
+        sm = _sm()
+        task = self._backlog_task(sm)
+        task.agent_key = "nonexistent-agent-xyz"
+        out = sm._generate_specialist_artifact(task)
+        assert isinstance(out, str) and len(out) > 50  # fallback template
+
+    def test_to_dict_roundtrip_keeps_agent_key(self):
+        import json as _json
+        sm = _sm()
+        task = self._backlog_task(sm)
+        task.agent_key = "sec-review"
+        d = _json.loads(_json.dumps(task.to_dict()))
+        assert d["agent_key"] == "sec-review"
