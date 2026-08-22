@@ -4250,10 +4250,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     _json(self, {"ok": True, "task": task.to_dict() if task else None})
                 elif action == "assign":
                     task_id = body.get("task_id", "")
-                    tier_val = body.get("tier", 2)
-                    tier = Tier(tier_val)
-                    task = sm.assign_task(task_id, tier)
+                    if body.get("agent_key"):
+                        # Specialist assignment: bind task to a registry agent
+                        task = sm.assign_task_to_agent(task_id, body["agent_key"])
+                    else:
+                        tier_val = body.get("tier", 2)
+                        tier = Tier(tier_val)
+                        task = sm.assign_task(task_id, tier)
                     _json(self, {"ok": True, "task": task.to_dict()})
+                elif action == "assign_agent":
+                    # Explicit specialist-assignment action
+                    task = sm.assign_task_to_agent(body.get("task_id", ""),
+                                                   body.get("agent_key", ""))
+                    _json(self, {"ok": True, "task": task.to_dict()})
+                elif action == "list_agents":
+                    _json(self, {"ok": True, "agents": sm.list_available_agents()})
                 elif action == "submit_artifact":
                     task_id = body.get("task_id", "")
                     art_type = body.get("artifact_type", "implementation_plan")

@@ -1858,12 +1858,14 @@ function renderKanban() {
       const isSynced = card.synced;
       const statusDot = isSynced && card.task_id ? `<span style="width:7px;height:7px;border-radius:50%;background:${statusDots[card.status]||'var(--text-dim)'};display:inline-block;margin-right:4px;vertical-align:middle"></span>` : '';
       const goalTag = card.goal_title ? `<div class="kanban-tag" style="background:rgba(124,91,245,.12);color:var(--accent);font-size:9px" title="${card.goal_title}">🎯 ${card.goal_title.slice(0,30)}</div>` : '';
+      // Specialist badge: task bound to a registry agent (Tier 1 dynamic workforce)
+      const specTag = card.agent_key ? `<div class="kanban-tag" style="background:rgba(34,211,238,.12);color:#22d3ee;font-size:9px" title="Specialist agent: ${card.agent_key}">🧩 ${card.agent_name || card.agent_key}</div>` : '';
       const triggers = (card.triggers||[]).map(t=>`<span class="kanban-tag" style="font-size:9px">${t}</span>`).join('');
       return `
       <div class="kanban-card" draggable="${!isSynced}" ondragstart="${isSynced ? '' : `dragStart(event,'${c}',${i})`}" ondragover="dragOver(event)" ondrop="${isSynced ? '' : `drop(event,'${c}',${i})`}" style="border-left:3px solid ${pbg ? 'var(--accent)' : 'var(--border)'}">
         <div class="kanban-card-title">${statusDot} ${ai} ${card.title}</div>
         ${card.desc?`<div class="kanban-card-desc">${card.desc.slice(0,120)}</div>`:''}
-        <div class="kanban-card-tags">${goalTag}${triggers}</div>
+        <div class="kanban-card-tags">${goalTag}${specTag}${triggers}</div>
       </div>`;
     }).join('');
   });
@@ -3412,7 +3414,7 @@ function projectList() {
 async function projectTab(tab) {
   _projectTab = tab;
   // Update tab styles
-  ['goals','tasks','decisions','files','api','chat'].forEach(function(t) {
+  ['goals','tasks','scrum','decisions','files','api','chat'].forEach(function(t) {
     const btn = document.getElementById('pd-tab-' + t);
     if (btn) { btn.style.background = t===tab ? 'rgba(124,91,245,0.15)' : ''; btn.style.color = t===tab ? 'var(--accent)' : ''; }
   });
@@ -3448,6 +3450,8 @@ async function projectTab(tab) {
           '<div style="flex:1"><div style="font-size:12px;font-weight:600">' + t.text + '</div>' +
           '<div style="font-size:10px;color:var(--text-dim);margin-top:2px">' + t.status + '</div></div></div>';
       }).join('');
+    } else if (tab==='scrum') {
+      await renderProjectScrum(el);
     } else if (tab==='decisions') {
       const d = await authFetch('/projects/' + encodeURIComponent(_projectCurrent) + '/state');
       const decs = d&&d.state&&d.state.decisions ? d.state.decisions : [];
@@ -3513,6 +3517,72 @@ async function projectTab(tab) {
       _projectChatPollStart();
     }
   } catch(e) { el.innerHTML = '<div style="color:var(--red)">Error: ' + e.message + '</div>'; }
+}
+
+// ═══ PROJECT SCRUM TAB — Tier 1 backlog + specialist staffing ═══
+
+async function renderProjectScrum(el) {
+  const name = encodeURIComponent(_projectCurrent);
+  let status, tasksRes, agentsRes;
+  try {
+    [status, tasksRes, agentsRes] = await Promise.all([
+      authFetch('/api/projects/scrum', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({project_name:_projectCurrent, action:'status'})}),
+      authFetch('/api/projects/scrum', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({project_name:_projectCurrent, action:'all_tasks'})}),
+      authFetch('/api/projects/scrum', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({project_name:_projectCurrent, action:'list_agents'})}),
+    ]);
+  } catch(e) { el.innerHTML = '<div class="empty">Scrum state unavailable.</div>'; return; }
+
+  const goal = (status && status.goal) || '(no goal set)';
+  const stats = [
+    ['Backlog', (status&&status.in_backlog)||0],
+    ['In progress', (status&&status.in_progress)||0],
+    ['Completed', (status&&status.completed)||0],
+    ['Failed', '<span style="color:' + ((status&&status.failed)?'var(--red)':'inherit') + '">' + ((status&&status.failed)||0) + '</span>'],
+    ['🧩 Specialist-assigned', '<span style="color:#22d3ee">' + ((status&&status.specialist_assigned)||0) + '</span>'],
+  ];
+  const statsHtml = stats.map(function(s) {
+    return '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px"><div style="font-size:15px;font-weight:700">' + s[1] + '</div><div style="font-size:9px;color:var(--text-dim)">' + s[0] + '</div></div>';
+  }).join('');
+
+  const tasks = (tasksRes && tasksRes.ok && tasksRes.tasks) ? tasksRes.tasks : [];
+  const agents = (agentsRes && agentsRes.ok && agentsRes.agents) ? agentsRes.agents : [];
+  const agentOptions = agents.map(function(a){ return '<option value="' + a.key + '">' + a.name + '</option>'; }).join('');
+  const statusColors = {backlog:'#888', assigned:'var(--yellow)', in_progress:'var(--blue)', artifact_pending:'var(--blue)', evaluation:'var(--yellow)', done:'var(--green)', failed:'var(--red)', blocked:'#f97316'};
+
+  const rowsHtml = tasks.length ? tasks.map(function(t) {
+    const c = statusColors[t.status] || '#888';
+    const specBadge = t.agent_key
+      ? '<span style="background:rgba(34,211,238,.12);color:#22d3ee;padding:1px 8px;border-radius:10px;font-size:9px;font-weight:600" title="Specialist: ' + t.agent_key + '">🧩 ' + (t.agent_name || t.agent_key) + '</span>'
+      : '';
+    const tierLbl = t.tier ? ('T' + t.tier) : '—';
+    const assignCtl = (!t.agent_key && t.status === 'backlog')
+      ? '<select onchange="scrumAssignAgent(\'' + t.id + '\', this.value)" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:10px;padding:2px 6px">' +
+        '<option value="">Assign…</option>' + agentOptions + '</select>'
+      : '';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:6px">' +
+      '<span style="width:8px;height:8px;border-radius:50%;background:' + c + ';flex-shrink:0"></span>' +
+      '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600">' + t.title + '</div>' +
+        '<div style="font-size:9.5px;color:var(--text-dim);margin-top:1px">' + t.id + ' · tier ' + tierLbl + ' · iter ' + (t.current_iteration||0) + '/' + (t.max_iterations||5) + '</div></div>' +
+      specBadge + assignCtl +
+    '</div>';
+  }).join('') : '<div class="empty">No scrum tasks yet. Set a project goal to decompose a backlog.</div>';
+
+  el.innerHTML =
+    '<div style="max-height:calc(100vh - 260px);overflow-y:auto;padding-right:4px">' +
+      '<div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">🎯 <strong style="color:var(--text)">' + goal + '</strong></div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">' + statsHtml + '</div>' +
+      '<div id="pd-scrum-tasks">' + rowsHtml + '</div>' +
+    '</div>';
+}
+
+async function scrumAssignAgent(taskId, agentKey) {
+  if (!agentKey || !_projectCurrent) return;
+  try {
+    await authFetch('/api/projects/scrum', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({project_name:_projectCurrent, action:'assign_agent', task_id:taskId, agent_key:agentKey})});
+  } catch(e) { alert('Assignment failed: ' + e.message); }
+  // Re-render the tab to show the new specialist badge
+  projectTab('scrum');
 }
 
 async function projectQuickAdd() {

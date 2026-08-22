@@ -1161,9 +1161,36 @@ The local Ollama model should be used for this work.
             "blocked": len([t for t in self.backlog if t.status == TaskStatus.BLOCKED]),
             "next_task": next_task.to_dict() if next_task else None,
             "auto_executor_running": self._auto_executor_running,
+            # Specialist staffing summary (Tier 1 dynamic workforce)
+            "specialist_assigned": len([t for t in self.backlog if getattr(t, "agent_key", None)]),
         }
 
         return report
+
+    def get_all_tasks(self) -> list[dict]:
+        """All tasks (backlog + completed + failed) for dashboard display.
+
+        Each dict includes agent_key and the resolved specialist display
+        name when the task is assigned to a registry agent.
+        """
+        out = []
+        for t in list(self.backlog) + list(self.completed_tasks) + list(self.failed_tasks):
+            d = t.to_dict()
+            key = getattr(t, "agent_key", None)
+            if key:
+                d["agent_key"] = key
+                d["agent_name"] = self._task_agent_label(t)
+            out.append(d)
+        return out
+
+    def list_available_agents(self) -> list[dict]:
+        """Active agents that can be assigned tasks (for the dashboard picker)."""
+        try:
+            sys.path.insert(0, str(AGENT_OS_ROOT / "scripts"))
+            from agent_registry import get_registry
+            return get_registry().list_agents(status_filter="active")
+        except Exception:
+            return []
 
     # ── Task Dependency Graph ──────────────────────────────────────────────
 
