@@ -33,8 +33,10 @@ export OPENROUTER_API_KEY=sk-or-...        # Tier 2 (architect)
 #   export TIER2_PROVIDER=gemini
 #   export GEMINI_API_KEY=...
 
-# 3. Start the server
-python3 scripts/server.py --port 7879
+# 3. Create the Python 3.11 virtualenv (standard interpreter) and start
+python3.11 -m venv .venv
+.venv/bin/pip install -r requirements.txt pytest
+.venv/bin/python scripts/server.py --port 7879
 # open http://localhost:7879
 ```
 
