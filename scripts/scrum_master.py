@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import re
 import time
 import uuid
 import sys
@@ -48,6 +49,26 @@ try:
     from agent_working_method import WORKING_METHOD_PREAMBLE as _WORKING_METHOD
 except ImportError:
     pass
+
+# ── Spec-anchored SDD: constitution loader ──
+# config/constitution.md is the single source of truth for the working method.
+# Falls back to the hardcoded WORKING_METHOD_PREAMBLE when absent/too short,
+# so a missing file never breaks the pipeline.
+
+def _load_constitution() -> str:
+    """Load the project constitution, falling back to the built-in preamble."""
+    try:
+        p = Path(__file__).resolve().parents[1] / "config" / "constitution.md"
+        text = p.read_text().strip()
+        # Strip markdown headings for a leaner prompt injection
+        lines = [ln for ln in text.splitlines() if not ln.startswith("#")]
+        body = "\n".join(lines).strip()
+        if len(body) >= 100:
+            return body
+    except Exception:
+        pass
+    return _WORKING_METHOD
+
 
 # ── Enums ──
 
@@ -123,6 +144,10 @@ class Task:
     # named registry agent (Hermes CLI with its memory/toolsets) instead of
     # the generic Gemini/template Tier 2 path. The tier stays TIER_2_ARCHITECT.
     agent_key: Optional[str] = None
+    # Spec-anchored SDD: the task's contract. Keys: intent (str),
+    # constraints (list[str]), acceptance_criteria (list[str]),
+    # out_of_scope (list[str]). Checked by _check_spec at evaluation.
+    spec: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -141,6 +166,7 @@ class Task:
             "max_iterations": self.max_iterations,
             "current_iteration": self.current_iteration,
             "agent_key": self.agent_key,
+            "spec": self.spec,
         }
 
 
@@ -298,6 +324,7 @@ class ScrumMaster:
           - tier: 2 or 3 (optional, auto-detected)
           - priority: int (0 = highest)
           - dependencies: list[str] (task IDs)
+          - spec: dict (optional; spec-anchored SDD contract — derived when absent)
 
         If no tasks provided, generates a default decomposition based on the goal.
         """
@@ -314,7 +341,11 @@ class ScrumMaster:
                 priority=td.get("priority", i),
                 dependencies=td.get("dependencies", []),
                 agent_key=td.get("agent_key"),
+                spec=td.get("spec") or {},
             )
+            if not task.spec:
+                task.spec = self._derive_spec(task)
+            self.write_spec_file(task)
             self.backlog.append(task)
 
         # Sort by priority
@@ -350,6 +381,98 @@ class ScrumMaster:
                 "dependencies": ["task-002"],
             },
         ]
+
+    # ── Spec-anchored SDD ────────────────────────────────────────────────
+
+
+    def _derive_spec(self, task: "Task") -> dict:
+        """Spec-anchored SDD: every task carries a minimal, checkable spec.
+
+        Deterministic derivation — no extra model call. Operator-supplied
+        specs (passed via decompose_backlog) always win over this.
+        """
+        return {
+            "intent": (task.description or task.title).strip(),
+            "constraints": [
+                "Must pass the ScrumGate merge checks (non-empty, compiles, no dangerous patterns)",
+            ],
+            "acceptance_criteria": [
+                f"Artifact addresses the stated intent: '{task.title}'",
+                "Artifact is concrete (references real file paths / function names where applicable)",
+            ],
+            "out_of_scope": [],
+        }
+
+    def write_spec_file(self, task: "Task") -> str:
+        """Persist the task spec as markdown in the project space (vault-indexable)."""
+        try:
+            specs_dir = Path(self.project_space) / "specs"
+            specs_dir.mkdir(parents=True, exist_ok=True)
+            p = specs_dir / f"{task.id}-spec.md"
+            if p.exists():
+                return str(p)
+            s = task.spec or {}
+            lines = [f"# Spec — {task.title}", "", "## Intent", s.get("intent", "")]
+            for key in ("constraints", "acceptance_criteria", "out_of_scope"):
+                items = s.get(key) or []
+                lines += [f"## {key.replace('_', ' ').title()}"] + [f"- {i}" for i in items]
+            p.write_text("\n".join(lines) + "\n")
+            return str(p)
+        except Exception as e:
+            print(f"  Spec file write skipped for {task.id}: {e}")
+            return ""
+
+    def _task_brief(self, task: "Task") -> str:
+        """Spec-anchored brief: constitution + spec contract + task + retry feedback.
+
+        Replaces the duplicated description assembly in the three artifact
+        generators; the spec is presented as the contract the artifact must
+        satisfy.
+        """
+        s = task.spec or self._derive_spec(task)
+        spec_md = (
+            "## Task Spec (the contract — your artifact MUST satisfy these)\n"
+            f"**Intent:** {s.get('intent', '')}\n"
+            f"**Constraints:**\n" + "".join(f"- {c}\n" for c in s.get("constraints", [])) +
+            "**Acceptance criteria (checked at the gate):**\n" +
+            "".join(f"- {a}\n" for a in s.get("acceptance_criteria", []))
+        )
+        if s.get("out_of_scope"):
+            spec_md += "**Out of scope:**\n" + "".join(f"- {o}\n" for o in s["out_of_scope"])
+        brief = f"{_load_constitution()}\n\n{spec_md}\n\n{task.title}\n\n{task.description}"
+        if task.current_iteration > 0 and task.evaluation_notes:
+            brief += f"\n\n=== PREVIOUS ATTEMPT FAILED — FIX THESE ISSUES ===\n{task.evaluation_notes}"
+        return brief
+
+    def _check_spec(self, artifact: "Artifact", task: "Task") -> dict:
+        """Spec-anchored evaluation: acceptance-criteria coverage.
+
+        Cheap, model-free keyword-coverage heuristic. Extracts salient tokens
+        from each acceptance criterion and requires most of them to appear in
+        the artifact. Subjective quality is left to the existing checks.
+        """
+        s = task.spec or {}
+        content = artifact.content if isinstance(artifact.content, str) else json.dumps(artifact.content)
+        text = (content or "").lower()
+        failures = []
+        stopwords = {
+            "must", "should", "artifact", "addresses", "stated", "intent",
+            "real", "file", "files", "paths", "where", "with", "that", "this",
+            "references", "concrete", "applicable", "function", "names", "such",
+            "covers", "include", "including",
+        }
+        criteria = s.get("acceptance_criteria") or []
+        for i, ac in enumerate(criteria, 1):
+            toks = [t for t in re.findall(r"[a-z_]{4,}", str(ac).lower()) if t not in stopwords]
+            if toks:
+                hit = sum(1 for t in toks if t in text)
+                if hit / len(toks) < 0.5:
+                    failures.append(f"AC{i} not addressed: '{str(ac)[:80]}'")
+        return {
+            "passed": not failures,
+            "notes": ("All acceptance criteria addressed" if not failures
+                      else "; ".join(failures)),
+        }
 
     # ── Task Assignment ──────────────────────────────────────────────────
 
@@ -737,9 +860,7 @@ class ScrumMaster:
         any failure so the pipeline never stalls.
         """
         key = task.agent_key or ""
-        description = f"{_WORKING_METHOD}\n\n{task.title}\n\n{task.description}"
-        if task.current_iteration > 0 and task.evaluation_notes:
-            description += f"\n\n=== PREVIOUS ATTEMPT FAILED — FIX THESE ISSUES ===\n{task.evaluation_notes}"
+        description = self._task_brief(task)
 
         try:
             sys.path.insert(0, str(AGENT_OS_ROOT / "scripts"))
@@ -786,10 +907,8 @@ class ScrumMaster:
         Fallback: static template (preserves prior behavior) when Gemini is
         unreachable or no key is set.
         """
-        # Build description with retry feedback if this is a retry
-        description = f"{_WORKING_METHOD}\n\n{task.title}\n\n{task.description}"
-        if task.current_iteration > 0 and task.evaluation_notes:
-            description += f"\n\n=== PREVIOUS ATTEMPT FAILED — FIX THESE ISSUES ===\n{task.evaluation_notes}"
+        # Spec-anchored brief: constitution + spec contract + retry feedback
+        description = self._task_brief(task)
 
         try:
             from gemini_worker import GeminiConfig, is_gemini_available, generate_architecture
@@ -910,16 +1029,13 @@ The Antigravity IDE with Gemini Pro should be used for this work.
     def _generate_tier3_artifact(self, task: Task) -> str:
         """Generate an implementation plan for Tier 3 tasks (Qwen 2.5 Coder / Ollama)."""
         description = task.description
-        retry_section = ""
-        if task.current_iteration > 0 and task.evaluation_notes:
-            retry_section = f"\n\n=== PREVIOUS ATTEMPT FAILED — FIX THESE ISSUES ===\n{task.evaluation_notes}\n"
 
-        return f"""{_WORKING_METHOD}
+        return f"""{self._task_brief(task)}
 
 # Implementation Plan for {task.title}
 
 ## Task Description
-{description}{retry_section}
+{description}
 
 ## Approach
 This task should be handled by the Tier 3 builder (local Ollama model) for focused, well-defined coding work.
@@ -1012,7 +1128,7 @@ The local Ollama model should be used for this work.
 
         try:
             for artifact in task.artifacts:
-                eval_result = self._evaluate_artifact(artifact, force_pass)
+                eval_result = self._evaluate_artifact(artifact, force_pass, task=task)
                 artifact.evaluated = True
                 artifact.passed = eval_result["passed"]
                 artifact.eval_notes = eval_result["notes"]
@@ -1086,12 +1202,23 @@ The local Ollama model should be used for this work.
             "iteration": task.current_iteration,
         }
 
-    def _evaluate_artifact(self, artifact: Artifact, force_pass: bool = False) -> dict:
-        """Evaluate a single artifact based on its type."""
+    def _evaluate_artifact(self, artifact: Artifact, force_pass: bool = False,
+                           task: "Task | None" = None) -> dict:
+        """Evaluate a single artifact based on its type.
+
+        Spec-anchored SDD: when the owning task is supplied (and carries
+        acceptance criteria), the spec check runs first — a spec failure
+        short-circuits into the normal retry-feedback loop.
+        """
         if force_pass:
             return {"passed": True, "notes": "Force passed (manual override)"}
 
         try:
+            if task is not None and getattr(task, "spec", None):
+                spec_res = self._check_spec(artifact, task)
+                if not spec_res["passed"]:
+                    return spec_res
+
             if artifact.artifact_type == ArtifactType.TEST_RUN_LOG:
                 content_str = artifact.content if isinstance(artifact.content, str) else json.dumps(artifact.content)
                 has_failures = "FAILED" in content_str or "ERROR" in content_str
