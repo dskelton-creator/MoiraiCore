@@ -1425,6 +1425,26 @@ The local Ollama model should be used for this work.
                         td["tier"] = Tier(td["tier"])
                     if "status" in td:
                         td["status"] = TaskStatus(td["status"])
+                    # Rebuild artifacts (persisted as dicts) into Artifact objects
+                    rebuilt_arts = []
+                    for a in td.get("artifacts", []) or []:
+                        if isinstance(a, Artifact):
+                            rebuilt_arts.append(a)
+                        elif isinstance(a, dict):
+                            try:
+                                rebuilt_arts.append(Artifact(
+                                    artifact_type=ArtifactType(a.get("type", "implementation_plan")),
+                                    task_id=a.get("task_id", td.get("id", "")),
+                                    content=a.get("content", ""),
+                                    file_path=a.get("file_path", ""),
+                                    created_at=a.get("created_at", ""),
+                                    evaluated=bool(a.get("evaluated", False)),
+                                    passed=bool(a.get("passed", False)),
+                                    eval_notes=a.get("eval_notes", ""),
+                                ))
+                            except Exception:
+                                pass
+                    td["artifacts"] = rebuilt_arts
                     return Task(**td)
 
                 self.backlog = [_rebuild_task(t) for t in state.get("backlog", [])]
