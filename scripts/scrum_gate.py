@@ -215,7 +215,7 @@ def generate_code_via_ollama(task_description: str, file_path: str,
             from ollama_worker import execute_tier3, OllamaConfig
 
             config = OllamaConfig()
-            config.per_iteration_timeout = 60
+            config.per_iteration_timeout = 180
             config.max_retries = max_iterations
             result = execute_tier3(task, config)
 

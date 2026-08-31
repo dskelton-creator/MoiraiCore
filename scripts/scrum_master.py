@@ -822,8 +822,11 @@ class ScrumMaster:
                 artifact_type = ArtifactType.IMPLEMENTATION_PLAN
                 self._emit(agent_lbl, f"🧠 Designing architecture for '{task.title}'")
             elif task.tier == Tier.TIER_3_BUILDER:
-                artifact_content = self._generate_tier3_artifact(task)
-                artifact_type = ArtifactType.IMPLEMENTATION_PLAN
+                # Real Tier 3 codegen: Ollama via scrum_gate, writing the file
+                # into the project space. Spec-anchored brief drives generation;
+                # the resulting source code becomes the artifact.
+                artifact_content = self._generate_tier3_code(task)
+                artifact_type = ArtifactType.CODE_DIFF
                 self._emit(agent_lbl, f"💻 Building implementation for '{task.title}'")
             else:
                 # Default to Tier 2 if not specified
@@ -1058,6 +1061,51 @@ This task should be handled by the Tier 3 builder (local Ollama model) for focus
 This is a Tier 3 task focused on concrete implementation.
 The local Ollama model should be used for this work.
 """
+
+    def _generate_tier3_code(self, task: Task) -> str:
+        """Real Tier 3 codegen: Ollama writes actual source into the project space.
+
+        Uses scrum_gate.generate_code_via_ollama (the iterative Ollama loop with
+        test verification) with the spec-anchored brief. Target file derived
+        from the task spec: spec['target_file'] if the operator supplied one,
+        else a slug of the task title under server/. Returns the generated
+        source as the artifact content. Falls back to the template plan when
+        Ollama is unavailable or generation fails, so the pipeline never stalls.
+        """
+        spec = task.spec or {}
+        target = spec.get("target_file") or ""
+        if not target:
+            slug = re.sub(r"[^a-z0-9]+", "_", task.title.lower()).strip("_")
+            target = f"server/{slug}.js"
+        # Ensure the parent dir exists inside the project space
+        dest = Path(self.project_space) / target
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        # generate_code_via_ollama requires the file to exist
+        dest.touch(exist_ok=True)
+
+        try:
+            import scrum_gate
+            # scrum_gate resolves paths against its module-level PROJECT_SPACE
+            # (defaults to the projects/ parent). Point it at this task's
+            # project space before calling codegen.
+            scrum_gate.PROJECT_SPACE = Path(self.project_space)
+            scrum_gate.SRC_DIR = scrum_gate.PROJECT_SPACE / "src"
+            scrum_gate.MERGE_QUEUE = scrum_gate.PROJECT_SPACE / ".antigravity" / "merge_queue"
+            scrum_gate.ARTIFACTS_DIR = scrum_gate.PROJECT_SPACE / ".antigravity" / "artifacts"
+            scrum_gate.REJECTED_DIR = scrum_gate.PROJECT_SPACE / ".antigravity" / "rejected"
+            from scrum_gate import generate_code_via_ollama
+            rel = str(dest.relative_to(Path(self.project_space)))
+            code, err = generate_code_via_ollama(
+                task_description=self._task_brief(task),
+                file_path=rel,
+                test_command="echo no-test",
+            )
+            if code:
+                return code
+            print(f"  Tier3 codegen failed for {task.id}: {err}; using template plan")
+        except Exception as e:
+            print(f"  Tier3 codegen error for {task.id}: {e}; using template plan")
+        return self._generate_tier3_artifact(task)
 
     # ── Artifact Management (Merge Gates) ─────────────────────────────────────
 

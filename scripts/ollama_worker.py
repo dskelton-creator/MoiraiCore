@@ -26,7 +26,7 @@ class OllamaConfig:
     max_retries: int = 5
     per_iteration_timeout: int = 60  # seconds (reduced from 120)
     temperature: float = 0.1  # Low temp for deterministic code fixes
-    max_tokens: int = 1024  # Reduced from 2048 for focused code
+    max_tokens: int = 4096  # Full-file generation needs headroom; 1024 truncated mid-statement
     api_key: str = "ollama"  # Ollama doesn't require a real key
     warm_on_start: bool = True  # Warm model to eliminate cold-start
 
