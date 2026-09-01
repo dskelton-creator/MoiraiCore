@@ -116,7 +116,7 @@ MoiraiCore/
 
 ```bash
 cd scripts
-python3 test_gemini_truncation.py     # Tier 2 transport + truncation/continuation
+python3 test_tier2_transport.py     # Tier 2 transport + truncation/continuation
 python3 test_tier_fallback.py         # Tier 2/3 failover
 python3 test_scrum_master.py          # Scrum pipeline (needs pytest)
 ```

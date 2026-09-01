@@ -32,7 +32,7 @@ for the native Gemini path. See [README](README.md#tier-2-backend-configuration)
 3. Run the relevant tests:
    ```bash
    cd scripts
-   python3 test_gemini_truncation.py
+   python3 test_tier2_transport.py
    python3 test_tier_fallback.py
    ```
 4. Run a syntax check on changed Python files:
