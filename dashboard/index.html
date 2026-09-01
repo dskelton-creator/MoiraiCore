@@ -41,20 +41,21 @@
       <a class="nav-item sub" data-view="kanban" onclick="go('kanban',this)"><span class="icon">⊞</span> Kanban</a>
       <a class="nav-item sub" data-view="reports" onclick="go('reports',this)"><span class="icon">📊</span> Reports</a>
       <a class="nav-item sub" data-view="tasks" onclick="go('tasks',this)"><span class="icon">⚡</span> Tasks <span class="badge" id="nav-tasks-count">0</span></a>
-      <a class="nav-item sub" data-view="graph" onclick="go('graph',this)"><span class="icon">🕸</span> Knowledge Graph</a>
-      <a class="nav-item sub" data-view="notes" onclick="go('notes',this)"><span class="icon">📝</span> Notes</a>
+      <a class="nav-item sub nav-adv" data-view="graph" onclick="go('graph',this)"><span class="icon">🕸</span> Knowledge Graph</a>
+      <a class="nav-item sub nav-adv" data-view="notes" onclick="go('notes',this)"><span class="icon">📝</span> Notes</a>
       <div class="nav-divider"></div>
       <div class="nav-subsection-title">System</div>
-      <a class="nav-item sub" data-view="systemlogs" onclick="go('systemlogs',this)"><span class="icon">📋</span> System Logs</a>
       <a class="nav-item sub" data-view="audit" onclick="go('audit',this)"><span class="icon">🛡</span> Audit Trail</a>
       <a class="nav-item sub" data-view="pipeline" onclick="go('pipeline',this)"><span class="icon">🔗</span> Pipeline</a>
-      <a class="nav-item sub" data-view="tier3" onclick="go('tier3',this)"><span class="icon">🔺</span> 3-Tier Pipeline</a>
-      <a class="nav-item sub" data-view="entities" onclick="go('entities',this)"><span class="icon">🕸️</span> Entity Timeline</a>
+      <a class="nav-item sub nav-adv" data-view="systemlogs" onclick="go('systemlogs',this)"><span class="icon">📋</span> System Logs</a>
+      <a class="nav-item sub nav-adv" data-view="tier3" onclick="go('tier3',this)"><span class="icon">🔺</span> 3-Tier Pipeline</a>
+      <a class="nav-item sub nav-adv" data-view="entities" onclick="go('entities',this)"><span class="icon">🕸️</span> Entity Timeline</a>
       <a class="nav-item sub" onclick="setupOpenEdit()"><span class="icon">🔑</span> Setup & SSO</a>
     </div>
 
     <div style="margin-top:auto;padding:10px">
-      <div style="font-size:10px;color:var(--text-dim);text-align:center">v2.0 · MoiraiCore</div>
+      <button class="btn" id="adv-toggle" onclick="toggleAdvanced()" style="width:100%;font-size:11px;padding:6px">Show advanced</button>
+      <div style="font-size:10px;color:var(--text-dim);text-align:center;margin-top:8px">v2.0 · MoiraiCore</div>
     </div>
   </div>
 
@@ -499,6 +500,26 @@
         <button class="btn primary small" onclick="loadPipeline()">↻ Refresh</button>
       </div>
       <div id="pipeline-status" style="display:flex;gap:10px;flex-wrap:wrap"></div>
+
+      <!-- SPEC HEALTH (improvement #8) -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <h4 style="margin:0;font-size:13px">Spec Health <span style="font-size:11px;color:var(--text-dim);font-weight:400">— contracts coverage, drift, git snapshots</span></h4>
+          <button class="btn primary small" onclick="loadSpecHealth()">↻ Refresh</button>
+        </div>
+        <div id="spec-health-strip" style="display:flex;gap:10px;flex-wrap:wrap"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px">
+          <div>
+            <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px">DRIFTED TASKS</div>
+            <div id="spec-health-drift" style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:8px;min-height:52px;max-height:180px;overflow-y:auto"></div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px">GIT SNAPSHOTS (accepted work)</div>
+            <div id="spec-health-snapshots" style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:8px;min-height:52px;max-height:180px;overflow-y:auto"></div>
+          </div>
+        </div>
+      </div>
+
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;flex:1;min-height:0">
         <div style="display:flex;flex-direction:column;gap:12px;overflow-y:auto">
           <h4 style="margin:0;font-size:13px">Contract Definitions</h4>

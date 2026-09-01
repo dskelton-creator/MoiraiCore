@@ -293,6 +293,39 @@ function toggleAdmin() {
 
 
 
+// ═══ Simplified navigation (improvement #8 UX pass) ═══
+// Advanced views (Knowledge Graph, Notes, System Logs, 3-Tier, Entity Timeline)
+// are hidden behind a "Show advanced" toggle so the default sidebar shows only
+// the daily-driver views: Chat, Overview, Goals, Agents, Projects, Outputs,
+// Kanban, Reports, Tasks, Pipeline, Audit, Setup.
+var ADV_SHOWN = false;
+function toggleAdvanced() {
+  ADV_SHOWN = !ADV_SHOWN;
+  document.querySelectorAll('.nav-adv').forEach(function(n) {
+    n.style.display = ADV_SHOWN ? '' : 'none';
+  });
+  var btn = document.getElementById('adv-toggle');
+  if (btn) btn.textContent = ADV_SHOWN ? 'Hide advanced' : 'Show advanced';
+  try { localStorage.setItem('mc_adv_nav', ADV_SHOWN ? '1' : '0'); } catch(e) {}
+}
+(function initAdvanced() {
+  try {
+    if (localStorage.getItem('mc_adv_nav') === '1') {
+      // applied on DOMContentLoaded via the same toggle
+      document.addEventListener('DOMContentLoaded', function() {
+        if (!ADV_SHOWN) toggleAdvanced();
+      });
+    }
+  } catch(e) {}
+  document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.nav-adv').forEach(function(n) {
+      if (!ADV_SHOWN) n.style.display = 'none';
+    });
+    var btn = document.getElementById('adv-toggle');
+    if (btn) btn.textContent = ADV_SHOWN ? 'Hide advanced' : 'Show advanced';
+  });
+})();
+
 function go(view, el) {
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
@@ -320,12 +353,59 @@ function go(view, el) {
   if(view==='agents') { channelsLoadAgentsForRegistry(); loadAgentRegistry(); }
   if(view==='systemlogs') { loadSystemLogs(); }
   if(view==='audit') { loadAudit(); }
-  if(view==='pipeline') { loadPipeline(); }
+  if (v === 'pipeline') { loadPipeline(); loadSpecHealth(); }
   if(view==='tier3') { loadTier3(); }
   if(view==='entities') { loadEntities(); }
 }
 
 // ═══ PIPELINE CONTRACTS VIEW (Feature 7) ═══
+// ═══ SPEC HEALTH PANEL (improvement #8) ═══
+var SPEC_HEALTH_PROJECT = 'smoke-test';
+function loadSpecHealth() {
+  var strip = document.getElementById('spec-health-strip');
+  var drift = document.getElementById('spec-health-drift');
+  var snaps = document.getElementById('spec-health-snapshots');
+  if (strip) strip.innerHTML = '<div style="color:var(--text-dim);font-size:12px">Loading…</div>';
+  var health = authFetch('/api/sdd/health?project=' + encodeURIComponent(SPEC_HEALTH_PROJECT))
+    .then(function(d){ return d || {}; });
+  var snapsP = authFetch('/api/sdd/snapshots?project=' + encodeURIComponent(SPEC_HEALTH_PROJECT))
+    .then(function(d){ return d || {}; }).catch(function(){ return {snapshots: []}; });
+
+  health.then(function(h) {
+    var c = h.counts || {};
+    var cells = [
+      ['Tasks', c.tasks || 0],
+      ['Implementation', c.implementation || 0],
+      ['Reviewers', c.reviewers || 0],
+      ['With contracts', '<span style="color:' + ((c.with_contracts||0) === (c.implementation||0) && c.implementation ? 'var(--green)' : 'var(--amber)') + '">' + (c.with_contracts || 0) + '/' + (c.implementation || 0) + '</span>'],
+      ['Done', c.done || 0],
+      ['Drifted', '<span style="color:' + (c.drifted ? 'var(--red)' : 'var(--green)') + '">' + (c.drifted || 0) + '</span>']
+    ];
+    if (strip) strip.innerHTML = cells.map(function(cell) {
+      return '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px"><div style="font-size:14px;font-weight:700">' + cell[1] + '</div><div style="font-size:10px;color:var(--text-dim)">' + cell[0] + '</div></div>';
+    }).join('');
+    if (drift) {
+      var list = h.drifted || [];
+      drift.innerHTML = list.length ? list.map(function(d) {
+        return '<div style="padding:6px 8px;border-left:3px solid var(--red);background:var(--surface);border-radius:0 6px 6px 0;margin-bottom:6px">' +
+          '<div style="font-size:12px;font-weight:600">' + d.task_id + ' — ' + d.title + '</div>' +
+          '<div style="font-size:11px;color:var(--red);margin-top:2px">' + d.reasons.map(function(r){ return '• ' + r; }).join('<br>') + '</div></div>';
+      }).join('') : '<div style="color:var(--text-dim);padding:8px;font-size:12px">No drift — all files still honour their specs ✅</div>';
+    }
+  }).catch(function(err) {
+    if (strip) strip.innerHTML = '<div style="color:var(--red);font-size:12px">⚠️ ' + (err.message || err) + '</div>';
+  });
+
+  snapsP.then(function(s) {
+    var list = s.snapshots || [];
+    if (snaps) snaps.innerHTML = list.length ? list.map(function(x) {
+      return '<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 6px;font-size:11px;border-bottom:1px solid var(--border)">' +
+        '<span style="font-family:monospace;color:var(--blue)">' + x.sha + '</span>' +
+        '<span style="flex:1">' + x.message + '</span></div>';
+    }).join('') : '<div style="color:var(--text-dim);padding:8px;font-size:12px">No snapshots yet — accepted tasks will appear here</div>';
+  });
+}
+
 function loadPipeline() {
   var statusEl = document.getElementById('pipeline-status');
   var contractsEl = document.getElementById('pipeline-contracts');

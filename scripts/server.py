@@ -1190,6 +1190,64 @@ class Handler(http.server.BaseHTTPRequestHandler):
             _json(self, {"files": files, "count": len(files)})
             return
 
+        if p.path == "/api/sdd/health":
+            # Improvement #8: spec-health panel — drift status per task +
+            # acceptance-criteria coverage stats from the ScrumMaster state.
+            try:
+                qs = parse_qs(p.query)
+                project = qs.get("project", [""])[0]
+                from scrum_master import ScrumMaster
+                from sdd_extras import DriftChecker
+                sm = ScrumMaster(project or "smoke-test")
+                try:
+                    sm._load_state()
+                except Exception:
+                    pass
+                drifted = DriftChecker(sm).check_all()
+                total = len(sm.backlog)
+                impl_tasks = [t for t in sm.backlog
+                              if not sm.is_reviewer_task(t)]
+                with_contracts = sum(
+                    1 for t in impl_tasks if (t.spec or {}).get("contracts"))
+                reviewers = total - len(impl_tasks)
+                _json(self, {
+                    "ok": True,
+                    "project": sm.project_name,
+                    "goal": sm.goal,
+                    "counts": {
+                        "tasks": total,
+                        "implementation": len(impl_tasks),
+                        "reviewers": reviewers,
+                        "with_contracts": with_contracts,
+                        "drifted": len(drifted),
+                        "done": sum(1 for t in sm.backlog
+                                    if t.status.value == "done"),
+                    },
+                    "drifted": drifted,
+                })
+            except Exception as e:
+                _json(self, {"ok": False, "error": str(e)})
+            return
+
+        if p.path == "/api/sdd/snapshots":
+            # Improvement #3: git-backed space log for the dashboard
+            try:
+                qs = parse_qs(p.query)
+                project = qs.get("project", [""])[0]
+                from scrum_master import ScrumMaster
+                from sdd_extras import GitSpace
+                sm = ScrumMaster(project or "smoke-test")
+                try:
+                    sm._load_state()
+                except Exception:
+                    pass
+                g = GitSpace(Path(sm.project_space))
+                _json(self, {"ok": True, "project": sm.project_name,
+                             "snapshots": g.log(20)})
+            except Exception as e:
+                _json(self, {"ok": False, "error": str(e), "snapshots": []})
+            return
+
         if p.path == "/api/pipeline/contracts":
             try:
                 from pipeline_contracts import list_contracts
