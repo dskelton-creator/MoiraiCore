@@ -146,7 +146,8 @@ class Task:
     agent_key: Optional[str] = None
     # Spec-anchored SDD: the task's contract. Keys: intent (str),
     # constraints (list[str]), acceptance_criteria (list[str]),
-    # out_of_scope (list[str]). Checked by _check_spec at evaluation.
+    # out_of_scope (list[str]), task_role ("reviewer" | absent),
+    # contracts (dict of dicts — shared agreements). Checked by _check_spec.
     spec: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
@@ -201,6 +202,10 @@ class ScrumMaster:
         self._auto_executor_interval = 5  # seconds
         # Dry-run mode (generate artifacts without writing to src/)
         self._dry_run = False
+        # Improvement #9: auto-derive shared contracts at decompose time.
+        # use_model=False keeps derivation deterministic (heuristic-only) —
+        # useful for tests and offline operation.
+        self.auto_contracts_use_model = True
         # Warm Ollama model in background to eliminate cold-start on first Tier 3 task
         self._warm_model()
 
@@ -350,6 +355,19 @@ class ScrumMaster:
 
         # Sort by priority
         self.backlog.sort(key=lambda t: t.priority)
+
+        # Improvement #9: auto-derive shared contracts when the operator
+        # supplied none (project-level file absent). Runs once per decompose;
+        # never blocks the pipeline.
+        try:
+            self.derive_and_apply_contracts(
+                task_descriptions,
+                use_model=self.auto_contracts_use_model,
+                force=False,
+            )
+        except Exception:
+            pass
+
         self._save_state()
         return self.backlog
 
@@ -579,6 +597,37 @@ class ScrumMaster:
             "passed": False,
             "notes": "Cross-file contract violations: " + "; ".join(findings),
         }
+
+    def derive_and_apply_contracts(
+        self,
+        task_descriptions: list[dict],
+        *,
+        use_model: bool = True,
+        force: bool = False,
+    ) -> dict:
+        """Improvement #9: auto-derive project contracts at decompose time.
+
+        Model (Tier 2) drafts cross-file agreements from goal + task
+        descriptions; heuristic extraction (routes/units/fields) fills gaps.
+        Applied + persisted ONLY when no project contracts exist yet (or
+        force=True). Operator task-level contracts always win at merge time.
+        Never raises — pipeline continuity comes first.
+        """
+        try:
+            from auto_contracts import auto_contracts
+            existing = self.load_project_contracts()
+            if existing and not force:
+                return existing
+            if not task_descriptions:
+                return {}
+            contracts = auto_contracts(self.goal or "", task_descriptions,
+                                       use_model=use_model)
+            if contracts:
+                self.write_contract_file(contracts)
+            return contracts
+        except Exception as e:
+            print(f"  contract auto-derivation skipped: {e}")
+            return {}
 
     def write_spec_file(self, task: "Task") -> str:
         """Persist the task spec as markdown in the project space (vault-indexable)."""
