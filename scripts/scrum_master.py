@@ -187,7 +187,10 @@ class ScrumMaster:
 
     def __init__(self, project_name: str, project_space: str | None = None):
         self.project_name = project_name
-        self.project_space = project_space or str(Path(__file__).resolve().parents[1] / "projects" / project_name)
+        # env override (used by scrum_mcp.py to isolate test project spaces)
+        env_space = os.environ.get("MOIRAICORE_PROJECT_SPACE")
+        self.project_space = project_space or env_space or str(
+            Path(__file__).resolve().parents[1] / "projects" / project_name)
         self.goal: str = ""
         self.backlog: list[Task] = []
         self.sprints: list[dict] = []
