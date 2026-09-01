@@ -403,6 +403,104 @@ class ScrumMaster:
             "out_of_scope": [],
         }
 
+    # ── Shared contracts (improvement #1) ─────────────────────────────────
+
+    _CONTRACTS_STOPWORDS = {
+        "must", "should", "honour", "honor", "shared", "contract", "contracts",
+        "agreement", "tasks", "value", "values",
+    }
+
+    @staticmethod
+    def _parse_contracts_md(text: str) -> dict:
+        """Parse contracts.md format:
+
+            ## endpoints
+            - tasks = /api/projects/{id}/tasks
+
+            ## units
+            - time = seconds
+        """
+        out: dict = {}
+        section = None
+        for raw in text.splitlines():
+            line = raw.strip()
+            if not line:
+                continue
+            if line.startswith("## "):
+                section = line[3:].strip().lower()
+                out.setdefault(section, {})
+                continue
+            if section and (line.startswith("- ") or line.startswith("* ")):
+                item = line[2:].strip()
+                if "=" in item:
+                    k, v = item.split("=", 1)
+                    out[section][k.strip()] = v.strip()
+                else:
+                    out[section][item] = ""
+        return {k: v for k, v in out.items() if v}
+
+    def load_project_contracts(self) -> dict:
+        """Load project-level contracts from specs/contracts.md (empty if absent)."""
+        p = Path(self.project_space) / "specs" / "contracts.md"
+        if not p.exists():
+            return {}
+        try:
+            return self._parse_contracts_md(p.read_text())
+        except Exception as e:
+            print(f"  contracts.md parse skipped: {e}")
+            return {}
+
+    def effective_contracts(self, task: "Task") -> dict:
+        """Merged view: project contracts + task-level contracts (task wins)."""
+        merged = dict(self.load_project_contracts())
+        raw = (task.spec or {}).get("contracts") or {}
+        if isinstance(raw, dict):
+            for section, entries in raw.items():
+                if isinstance(entries, dict):
+                    merged.setdefault(section, {}).update(entries)
+        return merged
+
+    def _contract_violations(self, artifact_text: str, contracts: dict) -> list[str]:
+        """Check contract token coverage in the artifact text.
+
+        For each contract entry, the VALUE's salient tokens must appear in the
+        artifact (same 50%-coverage rule as acceptance criteria). Independent
+        generators that ignore shared shapes fail here instead of at integration.
+        """
+        text = (artifact_text or "").lower()
+        failures: list[str] = []
+        for section, entries in (contracts or {}).items():
+            for key, value in entries.items():
+                tokens = [
+                    t for t in re.findall(r"[a-z_{}0-9./-]{4,}", str(value).lower())
+                    if t not in self._CONTRACTS_STOPWORDS
+                ]
+                if not tokens:
+                    continue
+                hit = sum(1 for t in tokens if t in text)
+                if hit / len(tokens) < 0.5:
+                    failures.append(
+                        f"contract '{section}.{key}' not honoured: expected '{value}'")
+        return failures
+
+    def write_contract_file(self, contracts: dict) -> str:
+        """Persist project-level contracts as specs/contracts.md."""
+        try:
+            specs_dir = Path(self.project_space) / "specs"
+            specs_dir.mkdir(parents=True, exist_ok=True)
+            p = specs_dir / "contracts.md"
+            lines = ["# Project Contracts (all tasks must honour)", ""]
+            for section, entries in (contracts or {}).items():
+                lines.append(f"## {section}")
+                for k, v in entries.items():
+                    lines.append(f"- {k} = {v}")
+                lines.append("")
+            p.write_text("\n".join(lines))
+            return str(p)
+        except Exception as e:
+            print(f"  contracts file write skipped: {e}")
+            return ""
+
     def write_spec_file(self, task: "Task") -> str:
         """Persist the task spec as markdown in the project space (vault-indexable)."""
         try:
@@ -416,6 +514,11 @@ class ScrumMaster:
             for key in ("constraints", "acceptance_criteria", "out_of_scope"):
                 items = s.get(key) or []
                 lines += [f"## {key.replace('_', ' ').title()}"] + [f"- {i}" for i in items]
+            if s.get("contracts"):
+                lines.append("## Contracts")
+                for section, entries in s["contracts"].items():
+                    lines.append(f"### {section}")
+                    lines += [f"- {k} = {v}" for k, v in entries.items()]
             p.write_text("\n".join(lines) + "\n")
             return str(p)
         except Exception as e:
@@ -439,6 +542,12 @@ class ScrumMaster:
         )
         if s.get("out_of_scope"):
             spec_md += "**Out of scope:**\n" + "".join(f"- {o}\n" for o in s["out_of_scope"])
+        contracts = self.effective_contracts(task)
+        if contracts:
+            spec_md += "**Shared Contracts (project-wide agreement — violations fail the gate):**\n"
+            for section, entries in contracts.items():
+                for k, v in entries.items():
+                    spec_md += f"- {section}: {k} = {v}\n"
         brief = f"{_load_constitution()}\n\n{spec_md}\n\n{task.title}\n\n{task.description}"
         if task.current_iteration > 0 and task.evaluation_notes:
             brief += f"\n\n=== PREVIOUS ATTEMPT FAILED — FIX THESE ISSUES ===\n{task.evaluation_notes}"
@@ -468,10 +577,18 @@ class ScrumMaster:
                 hit = sum(1 for t in toks if t in text)
                 if hit / len(toks) < 0.5:
                     failures.append(f"AC{i} not addressed: '{str(ac)[:80]}'")
+        # Shared contracts (improvement #1): independent generators must honour
+        # project/task-wide agreements (endpoints, units, field names, shapes).
+        contract_failures = self._contract_violations(text, self.effective_contracts(task))
+        failures.extend(contract_failures)
+        notes = ("All acceptance criteria addressed" if not failures
+                 else "; ".join(failures))
+        if contract_failures:
+            notes = (notes + " — shared contracts keep independently generated "
+                     "files consistent; fix to the agreed values").strip("; ")
         return {
             "passed": not failures,
-            "notes": ("All acceptance criteria addressed" if not failures
-                      else "; ".join(failures)),
+            "notes": notes,
         }
 
     # ── Task Assignment ──────────────────────────────────────────────────
