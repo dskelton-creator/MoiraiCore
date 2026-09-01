@@ -501,6 +501,85 @@ class ScrumMaster:
             print(f"  contracts file write skipped: {e}")
             return ""
 
+    # ── Reviewer tasks (improvement #2) ───────────────────────────────────
+
+    def is_reviewer_task(self, task: "Task") -> bool:
+        """True when the task's spec marks it as a cross-file reviewer task."""
+        return (task.spec or {}).get("task_role") == "reviewer"
+
+    def reviewer_artifact_type(self):
+        """Reviewer output is a report — reuse the DESIGN_DECISION artifact type."""
+        return ArtifactType.DESIGN_DECISION
+
+    def review_contract_compliance(self) -> list[str]:
+        """Model-free cross-file check: scan every implementation task's
+        generated file (spec.target_file) against effective contracts.
+
+        This is the mechanical version of the wfm-wmo failure mode — the file
+        CONTENT is what ships, so that is what gets checked, not the artifact
+        text that was accepted earlier.
+        Returns findings as [\"task-001: contract 'endpoints.tasks' not honoured: expected '...'\"].
+        """
+        findings: list[str] = []
+        for t in self.backlog:
+            if self.is_reviewer_task(t) or t.status != TaskStatus.DONE:
+                continue
+            target = (t.spec or {}).get("target_file")
+            if not target:
+                continue
+            p = Path(self.project_space) / target
+            if not p.exists():
+                continue
+            try:
+                text = p.read_text()
+            except Exception:
+                continue
+            for v in self._contract_violations(text, self.effective_contracts(t)):
+                findings.append(f"{t.id}: {v}")
+        return findings
+
+    def _implementation_tasks(self) -> list["Task"]:
+        return [t for t in self.backlog if not self.is_reviewer_task(t)]
+
+    def _review_brief(self, review_task: "Task") -> str:
+        """Brief for the reviewer: contracts + per-task intents + findings so far."""
+        lines = [self._task_brief(review_task), "",
+                 "## Review Scope — implementation tasks in this project"]
+        for t in self._implementation_tasks():
+            s = t.spec or {}
+            lines.append(f"### {t.id} — {t.title} ({t.status.value})")
+            lines.append(f"- Intent: {s.get('intent', '')}")
+            tf = s.get("target_file")
+            if tf:
+                p = Path(self.project_space) / tf
+                if p.exists():
+                    content = p.read_text()[:2000]
+                    lines.append(f"- File `{tf}`:\n```\n{content}\n```")
+                else:
+                    lines.append(f"- File `{tf}`: (not yet generated)")
+        findings = self.review_contract_compliance()
+        if findings:
+            lines.append("## Mechanical findings (already detected — verify and expand)")
+            lines += [f"- {f}" for f in findings]
+        else:
+            lines.append("## Mechanical findings: none — verify semantic consistency")
+        return "\n".join(lines)
+
+    def _evaluate_review(self, impl_tasks: list["Task"] | None = None,
+                         findings: list[str] | None = None) -> dict:
+        """Gate for reviewer tasks: pass only when mechanical findings are empty.
+
+        The model's review report must ALSO acknowledge the findings; silence
+        about known violations fails the review.
+        """
+        findings = findings if findings is not None else self.review_contract_compliance()
+        if not findings:
+            return {"passed": True, "notes": "All files honour shared contracts"}
+        return {
+            "passed": False,
+            "notes": "Cross-file contract violations: " + "; ".join(findings),
+        }
+
     def write_spec_file(self, task: "Task") -> str:
         """Persist the task spec as markdown in the project space (vault-indexable)."""
         try:
