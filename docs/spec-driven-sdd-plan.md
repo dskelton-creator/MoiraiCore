@@ -186,3 +186,17 @@ retries converge on the contract rather than on length heuristics.
   methodology above delivers the same checkpoints without IDE tooling.
 - Keep specs lightweight for ad-hoc Tier 3 micro-fixes (auto-derived spec is
   fine); operator-written specs only for features.
+
+---
+
+## Update — Aug 2026: shared contracts implemented (improvements #1, #9, #2)
+
+The cross-file divergence weakness identified above is now closed in code:
+
+- **#1 Shared contracts** (commit d1efb71): task specs carry `contracts` dicts; project-wide agreements live in `specs/contracts.md`. `effective_contracts()` merges (task wins). `_task_brief()` renders them; `_check_spec()` token-checks contract values — violations fail the gate.
+- **#9 Auto-derivation** (commit cabf5eb): when no project contracts exist at decompose time, `derive_and_apply_contracts()` drafts them (`scripts/auto_contracts.py`) — heuristic route/unit/field extraction + optional Tier-2 JSON drafting. Toggle: `sm.auto_contracts_use_model = False`.
+- **#2 Reviewer tasks** (commit d1784ea): `spec.task_role: "reviewer"` tasks scan each DONE implementation task's **generated file** (not artifact text) against effective contracts and fail closed. `_review_brief()` assembles contracts + intents + file contents + mechanical findings for the model.
+
+Lesson from the validation run against the original wfm-wmo artifacts: keep contracts tight and file-scoped — broad sets applied across unrelated files produce noise findings. Genuinely shared items (status values, block units) are the right granularity.
+
+Tests: `tests/test_contracts.py`, `tests/test_reviewer_tasks.py`, `tests/test_auto_contracts.py` (38 combined). Suite: 72 passing.
