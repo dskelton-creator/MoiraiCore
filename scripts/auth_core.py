@@ -57,6 +57,12 @@ def save_json(path: Path, data: Any):
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(data, indent=2, default=str))
     os.replace(tmp, path)
+    # Secret stores (users, sessions, oauth clients under config/auth) get 0600.
+    try:
+        if "auth" in path.parts:
+            os.chmod(path, 0o600)
+    except OSError:
+        pass
 
 
 def hash_password(plain: str) -> str:

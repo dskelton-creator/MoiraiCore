@@ -388,8 +388,12 @@ class WorkflowRunner:
             if not command:
                 return {"error": "No command provided"}
             try:
+                # Security: restrict shell actions to the workspace tree (same
+                # boundary as save-file) so a compromised workflow definition
+                # cannot touch config/, auth, or the wider filesystem.
+                workspace_root = (AGENT_OS_ROOT / "workspace").resolve()
                 r = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=60,
-                                   cwd=str(AGENT_OS_ROOT))
+                                   cwd=str(workspace_root))
                 return {"stdout": r.stdout[:2000], "stderr": r.stderr[:1000], "returncode": r.returncode}
             except Exception as e:
                 return {"error": str(e)}
@@ -420,7 +424,13 @@ class WorkflowRunner:
             file_path = config.get("file_path", "")
             if not file_path:
                 return {"error": "No file_path provided"}
-            full_path = AGENT_OS_ROOT / file_path
+            # Path-traversal guard: resolve and require the target stays under AGENT_OS_ROOT.
+            root = AGENT_OS_ROOT.resolve()
+            full_path = (root / file_path).resolve()
+            try:
+                full_path.relative_to(root)
+            except ValueError:
+                return {"error": f"Invalid file_path: resolves outside workspace root ({full_path})"}
             if not full_path.exists():
                 return {"error": f"File not found: {file_path}"}
             content = full_path.read_text(errors="ignore")[:5000]

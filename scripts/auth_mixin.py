@@ -56,20 +56,12 @@ def install_auth(handler_cls):
         public_exact = {
             "/", "/index.html",
             "/favicon.ico",
+            "/api/setup/status",  # first-run gate: minimal fields only
         }
         public_prefixes = (
-            "/api/auth/",
-            "/api/auth/openai/status",  # public: dashboard polls connection state pre-login
-            "/api/setup/",              # public: first-run wizard gate (GET /api/setup/status)
+            "/api/auth/",               # login/token endpoints only (no status leaks)
             "/api/health",
-            "/api/stats",
-            "/api/projects/tasks/graph",  # Task dependency graph (public)
-            "/api/audit/events",  # Audit events read (public)
-            "/api/reports/",
-            "/api/backup/status",
-            "/api/lnb/",
-            "/reports/",
-            "/docs/",
+            "/api/projects/tasks/graph",
             "/dashboard/",  # First-party dashboard assets (style.css, app.js)
             "/vendor/",  # Vendored third-party frontend bundles (same-origin static JS)
         )

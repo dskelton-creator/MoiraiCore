@@ -980,6 +980,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
             _json(self, {"ok": True, "available": True, **st})
             return
 
+        # ── SETUP SYSTEM MANIFEST (auth required — full config prefill) ──
+        if p.path == "/api/setup/system":
+            if not _HAS_SETUP:
+                _json(self, {"ok": False, "available": False})
+                return
+            cfg = _setup_mod.load_config()
+            _json(self, {"ok": True, "available": True, "system": {
+                "organization_name": cfg.get("organization_name"),
+                "workspace": cfg.get("workspace"),
+                "model": _setup_mod._deep_copy(cfg.get("model", {}) or {}),
+                "google_oauth": _setup_mod._deep_copy(cfg.get("google_oauth", {}) or {}),
+            }})
+            return
+
         # ── GOOGLE OAUTH (public, pre-login) ──
         if p.path == "/api/auth/google/status":
             if not _HAS_GOOGLE_OAUTH:
@@ -1126,7 +1140,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         # ── SERVE REPORTS ──
         if p.path.startswith("/reports/"):
             report_name = p.path[len("/reports/"):]
-            report_path = AGENT_OS_ROOT / "workspace" / "reports" / report_name
+            try:
+                report_path = _safe_dir_join(AGENT_OS_ROOT / "workspace" / "reports", report_name)
+            except ValueError:
+                self.send_error(403, "Invalid report path")
+                return
             if report_path.exists() and report_path.suffix == ".html":
                 body = report_path.read_bytes()
                 self.send_response(200)
@@ -2748,8 +2766,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         self.send_error(404)
 
-    def _read_json_body(self):
+    def _read_json_body(self, max_bytes: int = 1_048_576):
         length = int(self.headers.get("Content-Length", 0))
+        if length > max_bytes:
+            self.send_error(413, "Request body too large")
+            return None
         try:
             return json.loads(self.rfile.read(length)) if length > 0 else {}
         except Exception:

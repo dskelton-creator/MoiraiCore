@@ -25,15 +25,32 @@ trusted local application, not a public web host.
 
 Relevant security properties:
 
-- **Authentication**: JWT-based. Access tokens valid 24h, refresh tokens 30d.
-- **Password hashing**: PBKDF2-SHA256 (never plaintext).
-- **Lockout protection**: brute-force mitigation on login.
+- **Authentication**: JWT-based (HS256). Access tokens valid 24h, refresh
+  tokens 7 days.
+- **Password hashing**: bcrypt (cost 12), never plaintext.
+- **Lockout protection**: brute-force mitigation on login (5 attempts →
+  15-minute lockout).
 - **Secrets**: API keys live in `.env` / `config/auth` and are **git-ignored**.
-  They are never committed to the repository.
+  They are never committed to the repository. Auth secret files (`users.json`,
+  `auth.log`, JWT secret) are permission-restricted to `0600`.
+- **Network binding**: the server binds to `127.0.0.1` only — it is not
+  reachable from other machines unless you deliberately rebind or tunnel it.
+- **Public endpoints**: only login/auth, the first-run setup gate (minimal
+  fields), health, and first-party dashboard assets are served without a
+  token. Everything else — including all mutating endpoints — requires a
+  Bearer token.
 - **Project isolation**: customer projects are sandboxed and reach the core
-  only over HTTP; file writes are jailed to the project directory.
+  only over HTTP; pipeline file writes are jailed to the project directory.
+  Workflow `shell` actions are confined to the workspace tree, and workflow
+  `save-file`/`load-file` paths are guarded against traversal.
 - **Code pipeline**: all code is generated → evaluated (syntax + security
-  scan) → merged to protected `src/`. Direct writes are blocked.
+  scan) → merged. Direct writes are blocked.
+
+## Known Limitations
+
+- Workflow `shell` actions and worker `run_command` execute shell commands by
+  design (authenticated, workspace/project-space confined). Do not share
+  access tokens with parties you would not give shell access to.
 
 ## Scope
 

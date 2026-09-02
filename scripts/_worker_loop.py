@@ -96,10 +96,14 @@ def handle_command(cmd_id: str, command: str, payload: dict):
 
         elif command == "run_command":
             cmd = payload.get("cmd", "")
+            # Security: confine worker shell commands to the project space so a
+            # task payload cannot touch config/, auth, or the wider filesystem.
+            cwd = os.path.abspath(payload.get("project_space") or os.getcwd())
             import subprocess
             try:
                 result = subprocess.run(
                     cmd, shell=True, capture_output=True, text=True, timeout=60,
+                    cwd=cwd,
                 )
                 send_result(cmd_id, {
                     "stdout": result.stdout,

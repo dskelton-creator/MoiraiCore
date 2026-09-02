@@ -126,13 +126,6 @@ def status(users_file: Optional[Path] = None) -> dict:
         "owner_email": cfg.get("owner_email"),
         "google_oauth_configured": bool(cfg.get("google_oauth", {}).get("client_id")),
         "configured": onboarded,
-        # Full manifest so the dashboard wizard can pre-fill its fields.
-        "system": {
-            "organization_name": cfg.get("organization_name"),
-            "workspace": cfg.get("workspace"),
-            "model": _deep_copy(cfg.get("model", {}) or {}),
-            "google_oauth": _deep_copy(cfg.get("google_oauth", {}) or {}),
-        },
     }
 
 

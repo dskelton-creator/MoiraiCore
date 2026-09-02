@@ -3361,11 +3361,19 @@ function setupSkipNow() {
 }
 
 async function setupCheck() {
+  const authed = !!(authToken || localStorage.getItem('moirai_token'));
   try {
     const r = await fetch(API + '/setup/status');
     if (!r.ok) return;
     const d = await r.json();
-    if (d && d.system) _setupSys = d.system;
+    // Full system manifest (model config, OAuth) is only served when
+    // authenticated — see setup.status(). Fetch it separately for prefill.
+    if (authed) {
+      try {
+        const sr = await authFetch('/setup/system');
+        if (sr && sr.system) _setupSys = sr.system;
+      } catch (e) { /* prefill is best-effort */ }
+    }
     const returningFromGoogle = localStorage.getItem('moirai_setup_google');
     if (returningFromGoogle) {
       localStorage.removeItem('moirai_setup_google');
