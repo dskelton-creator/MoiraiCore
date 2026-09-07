@@ -9,7 +9,7 @@ from pathlib import Path
 # Add scripts dir to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-_test_dir = Path(tempfile.mkdtemp(prefix="moirai_worker_test_"))
+_test_dir = Path(os.environ["AGENT_OS_ROOT"])
 os.environ["AGENT_OS_ROOT"] = str(_test_dir)
 
 from worker_manager import (

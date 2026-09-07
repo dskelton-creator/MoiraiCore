@@ -47,6 +47,27 @@ python3.11 -m venv .venv
 
 > **Note:** MoiraiCore runs on port **7879** (Hagent OS uses 7878). The command-line `hermes` binary must be on your PATH for the goal engine's Tier 1 orchestration.
 
+### 60-second demo: the merge gate that says no
+
+No keys, no network, no model — watch the gate refuse spec-violating work and accept a compliant retry:
+
+```bash
+.venv/bin/python scripts/demo_gate.py
+```
+
+```text
+➜ 1. Decompose the goal into a spec-anchored backlog
+✔ 3 tasks, each carrying an auto-derived spec contract
+➜ 2. Submit a lazy artifact that ignores the acceptance criteria
+    gate verdict: FAIL
+✔ Merge gate REFUSED the artifact — AC1 not addressed: 'Artifact addresses the stated intent…'
+➜ 3. Retry: submit an artifact that satisfies the acceptance criteria
+    gate verdict: PASS
+✔ Merge gate ACCEPTED the compliant artifact — task marked DONE
+```
+
+That refusal + convergence loop is the core of MoiraiCore's spec-anchored SDD.
+
 ### First-run setup (onboarding wizard)
 
 On first launch, MoiraiCore shows a **setup wizard** that walks you through:

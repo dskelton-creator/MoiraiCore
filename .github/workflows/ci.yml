@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.11"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+
+      - name: Verify zero-credential demo runs
+        run: python scripts/demo_gate.py
+
+      - name: Run test suite (no credentials required)
+        env:
+          # Guarantee the no-credentials path: CI machines have no keys anyway,
+          # but be explicit so a leaked secret in the runner can't mask failures.
+          TIER2_MODEL: ""
+          TIER2_BASE_URL: ""
+          TIER2_API_KEY: ""
+          GEMINI_API_KEY: ""
+        run: python -m pytest -q
+
+      - name: Vendor-neutrality gate
+        run: |
+          # The public positioning is "bring your own models" — no vendor names
+          # may appear in shipped code or docs.
+          ! grep -rniE 'deepseek|openrouter|z-ai|owl-alpha' scripts/*.py *.md docs/*.md || {
+            echo "::error::Vendor-specific names found. Use neutral provider terms (OpenAI-compatible endpoint, operator-selected model)."
+            exit 1
+          }
