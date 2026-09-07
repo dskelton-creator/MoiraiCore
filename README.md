@@ -4,7 +4,7 @@
 
 Everything runs on your machine. Your data never leaves it.
 
-> Formerly "Hagent"/"Hagent OS". **MoiraiCore** is the open-source platform core extracted and rebranded for public release.
+users can use a mix of either fully cloud models or local llm's to help maintain security and sensitivity of data on your local machine 
 
 ---
 
