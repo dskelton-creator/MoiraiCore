@@ -430,7 +430,24 @@ Output ONLY the JSON, no other text."""
 
         # Try to extract JSON from the response
         try:
-            # Look for JSON block
+            # Robust extraction first (fences, prose wrappers, nested braces)
+            try:
+                from llm_json import parse_verdict
+                parsed = parse_verdict(response)
+                if parsed:
+                    return VerificationVerdict(
+                        score=parsed["score"],
+                        status=parsed["status"],
+                        reasoning=parsed["reasoning"],
+                        suggestions=parsed["suggestions"],
+                        missing_elements=parsed["missing_elements"],
+                        task_id=task_id,
+                        task_title=task_title,
+                    )
+            except ImportError:
+                pass  # llm_json unavailable — legacy path below
+
+            # Legacy: look for JSON block
             m = re.search(r"\{[\s\S]*\}", response)
             if m:
                 data = json.loads(m.group(0))

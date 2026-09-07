@@ -133,6 +133,19 @@ def run_hermes(args: list[str], timeout: int = 600, workdir: str = None) -> dict
     env = {**os.environ}
     if workdir:
         env["TERMINAL_CWD"] = workdir
+    # Circuit breaker: fail fast while the provider is known-down
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    try:
+        from provider_breaker import breaker_open, breaker_error, is_provider_failure, record_success, record_failure
+    except Exception:
+        breaker_open = None  # breaker is best-effort; never block the bridge
+        breaker_error = lambda: "Provider circuit breaker unavailable"
+        is_provider_failure = lambda r: False
+        record_success = lambda: None
+        record_failure = lambda r: None
+    if breaker_open and breaker_open():
+        return {"ok": False, "session_id": None, "response": None,
+                "error": breaker_error(), "exit_code": -2, "duration_ms": 0}
     try:
         result = subprocess.run(
             cmd,
@@ -167,14 +180,32 @@ def run_hermes(args: list[str], timeout: int = 600, workdir: str = None) -> dict
         # empty reply). Surface a clear error so the caller never shows a
         # misleading blank "No response".
         if result.returncode == 0 and not response_text:
+            _fb = {"ok": False, "response": None,
+                   "error": "Hermes returned an empty response (model may have stalled — try again or reduce the message size)"}
+            if breaker_open is not None:
+                try:
+                    record_failure(_fb)
+                except Exception:
+                    pass
             return {
                 "ok": False,
                 "session_id": session_id,
                 "response": None,
-                "error": "Hermes returned an empty response (model may have stalled — try again or reduce the message size)",
+                "error": _fb["error"],
                 "exit_code": result.returncode,
                 "duration_ms": duration_ms,
             }
+
+        if breaker_open is not None:
+            try:
+                if result.returncode == 0:
+                    record_success()
+                else:
+                    _fb = {"ok": False, "response": response_text, "error": stderr}
+                    if is_provider_failure(_fb):
+                        record_failure(_fb)
+            except Exception:
+                pass
 
         return {
             "ok": result.returncode == 0,

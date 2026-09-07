@@ -33,6 +33,13 @@ Relevant security properties:
 - **Secrets**: API keys live in `.env` / `config/auth` and are **git-ignored**.
   They are never committed to the repository. Auth secret files (`users.json`,
   `auth.log`, JWT secret) are permission-restricted to `0600`.
+- **Workflow/worker shell actions**: file writes are jailed to the workspace /
+  project tree. Shell commands (`workflow_engine` `shell` action, worker
+  `run_command`) run with cwd pinned to that tree and are refused when no
+  project space is named or the target resolves under `config/`. Note:
+  `shell=True` cannot be fully sandboxed — these actions are trusted-operator
+  features and workflow definitions should only come from authenticated,
+  authorized users.
 - **Network binding**: the server binds to `127.0.0.1` only — it is not
   reachable from other machines unless you deliberately rebind or tunnel it.
 - **Public endpoints**: only login/auth, the first-run setup gate (minimal

@@ -972,12 +972,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         # ── SETUP (first-run system configuration, public) ──
         if p.path == "/api/setup/status":
+            # Public (pre-login) — the dashboard only needs the onboarding gate
+            # flags. Organization/owner identity stays behind auth at
+            # /api/setup/system to avoid pre-login info disclosure.
             if not _HAS_SETUP:
                 _json(self, {"ok": False, "needs_onboarding": False,
                              "available": False})
                 return
             st = _setup_mod.status()
-            _json(self, {"ok": True, "available": True, **st})
+            _json(self, {"ok": True, "available": True,
+                         "onboarded": st.get("onboarded"),
+                         "has_users": st.get("has_users"),
+                         "needs_onboarding": st.get("needs_onboarding"),
+                         "configured": st.get("configured")})
             return
 
         # ── SETUP SYSTEM MANIFEST (auth required — full config prefill) ──

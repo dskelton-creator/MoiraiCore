@@ -61,7 +61,6 @@ def install_auth(handler_cls):
         public_prefixes = (
             "/api/auth/",               # login/token endpoints only (no status leaks)
             "/api/health",
-            "/api/projects/tasks/graph",
             "/dashboard/",  # First-party dashboard assets (style.css, app.js)
             "/vendor/",  # Vendored third-party frontend bundles (same-origin static JS)
         )

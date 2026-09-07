@@ -258,13 +258,22 @@ Output ONLY the JSON, no other text."""
         result = run_hermes(["chat", "-q", prompt, "--quiet", "--pass-session-id"] + _tier1_model_args(reasoning_effort="high"), timeout=60)
         response = result.get("response", "")
 
-        # Parse JSON from response
-        import re
-        m = re.search(r"\{[\s\S]*\}", response)
-        if m:
-            data = json.loads(m.group(0))
-            if "subtasks" in data and data["subtasks"]:
-                return data
+        # Robust JSON extraction (handles fences, prose wrappers, nested braces)
+        try:
+            from llm_json import parse_subtasks
+            data = parse_subtasks(response)
+        except Exception:
+            data = None
+        if not data:  # legacy fallback
+            import re
+            m = re.search(r"\{[\s\S]*\}", response)
+            if m:
+                try:
+                    data = json.loads(m.group(0))
+                except json.JSONDecodeError:
+                    data = None
+        if data and data.get("subtasks"):
+            return data
     except Exception as e:
         pass
 

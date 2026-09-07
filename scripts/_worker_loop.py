@@ -98,7 +98,22 @@ def handle_command(cmd_id: str, command: str, payload: dict):
             cmd = payload.get("cmd", "")
             # Security: confine worker shell commands to the project space so a
             # task payload cannot touch config/, auth, or the wider filesystem.
-            cwd = os.path.abspath(payload.get("project_space") or os.getcwd())
+            # (shell=True cannot be fully jailed; this pins cwd to the project
+            # space and refuses to run when the caller did not name one, so a
+            # payload can never default to the repo root or config dirs.)
+            project_space = (payload.get("project_space") or "").strip()
+            if not project_space:
+                send_error(cmd_id, "run_command refused: no project_space given")
+                return
+            cwd = os.path.abspath(project_space)
+            _root = os.path.abspath(os.getcwd())
+            if not cwd.startswith(_root + os.sep) and cwd != _root:
+                send_error(cmd_id, "run_command refused: outside workspace")
+                return
+            _cfg = os.path.join(_root, "config")
+            if cwd == _cfg or cwd.startswith(_cfg + os.sep):
+                send_error(cmd_id, "run_command refused: config is off-limits")
+                return
             import subprocess
             try:
                 result = subprocess.run(
