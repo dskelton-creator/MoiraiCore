@@ -8,6 +8,10 @@ users can use a mix of either fully cloud models or local llm's to help maintain
 
 ---
 
+## Documentation
+
+- **[Design wiki](docs/moiraicore-design-wiki.html)** — a self-contained HTML deep-dive: architecture, the 3-tier pipeline, the merge gate, API surface, runbook, and every improvement shipped since launch. Download and open in a browser — no server needed.
+
 ## Highlights
 
 - **Mission Control dashboard** — a single-file SPA (`dashboard/`) that unifies agents, goals, kanban, vault, outputs, and reports.
