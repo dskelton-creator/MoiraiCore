@@ -42,7 +42,7 @@ AGENT_DEFINITIONS = {
         "emoji": "🧠",
         "role": "General-Purpose Agent",
         "status": "active",
-        "model": "openrouter/owl-alpha",
+        "model": "",
         "memory_folder": "agents/hermes",
         "skills": [],
         "toolsets": ['terminal,file,session_search,clarify,memory,skills'],

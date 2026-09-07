@@ -286,7 +286,7 @@ def route_task(description: str, context: dict = None) -> RoutingDecision:
     tier = TASK_TIER_MAP.get(task_type, Tier.TIER_3_BUILDER)
 
     engine_map = {
-        Tier.TIER_1_DIRECTOR: "deepseek/deepseek-v4-pro",
+        Tier.TIER_1_DIRECTOR: "director",
         Tier.TIER_2_ARCHITECT: "gemini-3.1-pro",
         # Display/routing label only — the live backend is chosen by
         # HAGENT_TIER3_BACKEND (ollama | pi). Kept in sync with tier3_manager's

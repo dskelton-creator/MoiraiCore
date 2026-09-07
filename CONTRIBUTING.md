@@ -21,9 +21,11 @@ cd MoiraiCore
 pip install -r requirements.txt
 ```
 
-The server needs a Tier 2 model backend. The default is OpenAI-compatible via
-OpenRouter (`OPENROUTER_API_KEY`); set `TIER2_PROVIDER=gemini` + `GEMINI_API_KEY`
-for the native Gemini path. See [README](README.md#tier-2-backend-configuration).
+The server needs a Tier 2 model backend: any OpenAI-compatible endpoint
+(`TIER2_BASE_URL` + `TIER2_MODEL` + `TIER2_API_KEY`); set `TIER2_PROVIDER=gemini`
++ `GEMINI_API_KEY` for the native Gemini path. No backend configured? Tests and
+the template fallback path run with zero credentials.
+See [README](README.md#tier-2-backend-configuration).
 
 ## Development Workflow
 

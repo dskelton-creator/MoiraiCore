@@ -35,8 +35,8 @@ DEFAULTS: dict[str, Any] = {
     "model": {
         "tier1": "director",                    # default Tier 1 / general role (informational)
         "tier2_provider": "openai",               # openai | gemini
-        "tier2_model": "deepseek/deepseek-v4-flash-0731",
-        "tier2_base_url": "https://openrouter.ai/api/v1",
+        "tier2_model": "",   # operator configures per tier — no vendor default
+        "tier2_base_url": "",
         "tier3_model": "qwen2.5-coder:14b",       # Ollama
     },
     "google_oauth": {

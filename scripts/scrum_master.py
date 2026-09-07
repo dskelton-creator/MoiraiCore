@@ -1136,8 +1136,14 @@ class ScrumMaster:
 
             args = ["chat", "-q", prompt, "--quiet", "--max-turns", "10",
                     "-t", get_toolsets_for_agent(key)]
-            result = run_hermes(args, timeout=900,
-                                workdir=str(self.project_space or AGENT_OS_ROOT))
+            # Session reuse + one fresh-session retry on provider failure.
+            # Task sessions are deliberately per-task (not cross-task) so a
+            # poisoned context can't leak between tasks; the reuse benefit is
+            # on the retry loop inside run_with_session.
+            from hermes_session_pool import run_with_session
+            result = run_with_session(args, max_retries=1, retry_delay=10,
+                                      timeout=900,
+                                      workdir=str(self.project_space or AGENT_OS_ROOT))
             output = (result.get("response") or "").strip()
             if len(output) >= 200:  # reject hollow/short responses
                 return output

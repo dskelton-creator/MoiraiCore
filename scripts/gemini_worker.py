@@ -45,16 +45,17 @@ class TruncatedResponseError(Exception):
 class GeminiConfig:
     """Configuration for Tier 2 worker.
 
-    Provider-agnostic: supports an OpenAI-compatible backend (OpenRouter /
-    DeepSeek, the default) and the Gemini native API as a fallback.
+    Provider-agnostic: supports any OpenAI-compatible chat-completions backend
+    (default) and the Google Gemini native API as a fallback. The operator
+    selects the provider and model per tier — no vendor is hardcoded.
     The class and function names are kept as `Gemini*` for backward
     compatibility with the 4 downstream consumers — the provider is just a
     transport detail inside the module.
     """
-    api_key: str = ""  # Loaded from OPENROUTER_API_KEY (or GEMINI_API_KEY fallback)
-    model: str = "deepseek/deepseek-v4-flash-0731"  # OpenAI model id / DeepSeek
+    api_key: str = ""  # Loaded from TIER2_API_KEY (or provider-specific vars)
+    model: str = ""  # OpenAI-compatible model id — set via TIER2_MODEL or config
     provider: str = "openai"  # "openai" (OpenAI-compatible) or "gemini" (native)
-    base_url: str = "https://openrouter.ai/api/v1"
+    base_url: str = ""  # OpenAI-compatible endpoint — operator configures
     max_tokens: int = 8192
     temperature: float = 0.3  # Slightly creative for architecture
     timeout: int = 120  # seconds
@@ -63,21 +64,22 @@ class GeminiConfig:
     def from_env(cls) -> "GeminiConfig":
         """Load config from environment variables.
 
-        Default backend is OpenAI-compatible via OpenRouter (cheap DeepSeek).
+        Default backend is OpenAI-compatible (any vendor); set TIER2_MODEL/TIER2_BASE_URL.
         Set TIER2_PROVIDER=gemini to use the Gemini native API instead.
         """
         provider = os.environ.get("TIER2_PROVIDER", "").strip().lower()
-        if provider in ("", "openai", "openrouter", "deepseek"):
-            # OpenAI-compatible default — prefer OpenRouter, allow DeepSeek direct
+        if provider in ("", "openai", "openai-compatible", "custom"):
+            # OpenAI-compatible default — operator picks the endpoint and model
             return cls(
-                api_key=os.environ.get(
-                    "OPENROUTER_API_KEY",
-                    os.environ.get("DEEPSEEK_API_KEY", ""),
+                api_key=(
+                    os.environ.get("TIER2_API_KEY")
+                    or os.environ.get("OPENAI_API_KEY")
+                    or ""
                 ),
-                model=os.environ.get("TIER2_MODEL", "deepseek/deepseek-v4-flash-0731"),
+                model=os.environ.get("TIER2_MODEL", ""),
                 provider="openai",
                 base_url=os.environ.get(
-                    "TIER2_BASE_URL", "https://openrouter.ai/api/v1"
+                    "TIER2_BASE_URL", ""
                 ),
                 max_tokens=int(os.environ.get("TIER2_MAX_TOKENS", "8192")),
                 temperature=float(os.environ.get("TIER2_TEMPERATURE", "0.3")),
@@ -156,7 +158,7 @@ def _call_gemini(config: GeminiConfig, prompt: str,
                  json_mode: bool = True) -> dict | str:
     """Call the Tier 2 backend and return parsed response.
 
-    Dispatches to the OpenAI-compatible transport (OpenRouter / DeepSeek) or
+    Dispatches to the OpenAI-compatible transport (any vendor) or
     the Gemini native transport based on ``config.provider``.
 
     Raises TruncatedResponseError when output is truncated (finish_reason
@@ -171,7 +173,7 @@ def _call_gemini(config: GeminiConfig, prompt: str,
 def _call_openai_compatible(config: GeminiConfig, prompt: str,
                             system_prompt: str = None,
                             json_mode: bool = False) -> dict | str:
-    """Call an OpenAI-compatible chat completions endpoint (OpenRouter/DeepSeek).
+    """Call an OpenAI-compatible chat completions endpoint (any vendor).
 
     Maps OpenAI request/response shapes and translates the truncation signal
     (finish_reason == "length") into TruncatedResponseError so the existing
@@ -217,7 +219,7 @@ def _call_openai_compatible(config: GeminiConfig, prompt: str,
                 return {"error": "no_choices", "raw_response": str(result)}
 
             choice = choices[0]
-            # Reasoning models (DeepSeek V4 Flash) may leave content as None
+            # Reasoning models may leave content as None
             # if the token budget is exhausted by the reasoning pass — coerce
             # to "" so continuation logic never receives a None partial.
             content = (choice.get("message") or {}).get("content") or ""
@@ -620,7 +622,7 @@ def generate_code_block(project_space: str, spec: str,
         config = GeminiConfig.from_env()
 
     if not config.api_key:
-        return "ERROR: Tier 2 API key not set (OPENROUTER_API_KEY / GEMINI_API_KEY)"
+        return "ERROR: Tier 2 API key not set (TIER2_API_KEY / GEMINI_API_KEY)"
 
     system_prompt = """You are an expert software engineer. Generate clean, production-ready code.
 |- Output ONLY the source code, no markdown fences, no comments explaining what you did
@@ -665,7 +667,7 @@ def is_gemini_available(config: GeminiConfig = None) -> bool:
     """Check if the Tier 2 backend is accessible and the key is valid.
 
     Dispatches by ``config.provider`` — sends a tiny chat completion to the
-    OpenAI-compatible endpoint (OpenRouter/DeepSeek) or a generateContent
+    OpenAI-compatible endpoint (any vendor) or a generateContent
     ping to the Gemini native API.
     """
     if config is None:

@@ -12,7 +12,7 @@ Everything runs on your machine. Your data never leaves it.
 
 - **Mission Control dashboard** — a single-file SPA (`dashboard/`) that unifies agents, goals, kanban, vault, outputs, and reports.
 - **3-Tier Agent Pipeline** — a governed code-generation pipeline with a ScrumMaster (Tier 1), a provider-agnostic architect engine (Tier 2), and a local execution worker (Tier 3), gated by ScrumGate before anything merges to `src/`.
-- **Provider-agnostic Tier 2** — swap backends via env vars (OpenAI-compatible OpenRouter/DeepSeek by default, Gemini native as fallback).
+- **Provider-agnostic Tier 2** — bring your own model: any OpenAI-compatible endpoint by default, Gemini native as a built-in alternative. No vendor is hardcoded.
 - **Memory Vault** — markdown/SQLite-FTS5 knowledge graph agents read and write.
 - **Goal Engine + Kanban** — decompose goals into tasks, route them to agents, evaluate artifacts, and synthesize reports.
 - **Full isolation** — customer projects live in their own spaces; they call MoiraiCore over HTTP and never touch core config.
@@ -27,11 +27,16 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .          # or: pip install -r requirements.txt
 
-# 2. Configure the Tier 2 model backend (OpenAI-compatible via OpenRouter)
-export OPENROUTER_API_KEY=sk-or-...        # Tier 2 (architect)
-#   optional Gemini fallback:
+# 2. Configure the Tier 2 model backend (any OpenAI-compatible endpoint)
+export TIER2_BASE_URL=https://api.example.com/v1   # your OpenAI-compatible endpoint
+export TIER2_MODEL=your-model-id                   # operator-selected per tier
+export TIER2_API_KEY=...                           # credential for that endpoint
+#   optional Gemini-native alternative:
 #   export TIER2_PROVIDER=gemini
 #   export GEMINI_API_KEY=...
+#
+# Zero-credentials smoke test: skip step 2 entirely — the pipeline falls back
+# to built-in template artifacts when no backend is configured.
 
 # 3. Create the Python 3.11 virtualenv (standard interpreter) and start
 python3.11 -m venv .venv
@@ -67,9 +72,9 @@ Google sign-in is available on the login screen whenever a Client ID is set.
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `TIER2_PROVIDER` | `openai` | `openai` (OpenAI-compatible) or `gemini` (native) |
-| `TIER2_MODEL` | `deepseek/deepseek-v4-flash-0731` | Model id |
-| `TIER2_BASE_URL` | `https://openrouter.ai/api/v1` | OpenAI-compatible endpoint |
-| `OPENROUTER_API_KEY` | — | Credential (OpenAI backend) |
+| `TIER2_MODEL` | — (operator sets) | Model id for the OpenAI-compatible backend |
+| `TIER2_BASE_URL` | — (operator sets) | OpenAI-compatible endpoint |
+| `TIER2_API_KEY` | — | Credential for the OpenAI-compatible endpoint |
 | `GEMINI_API_KEY` | — | Credential (Gemini backend) |
 | `TIER2_MAX_TOKENS` | `8192` | Output budget (keep generous for reasoning models) |
 
@@ -83,7 +88,8 @@ Google sign-in is available on the login screen whenever a Client ID is set.
 │   ┌───────────────┐   ┌────────────────┐           │
 │   │  TIER 2        │   │  TIER 3        │           │
 │   │  Architect     │   │  Local worker  │           │
-│   │  DeepSeek/Gemini│  │  Ollama        │           │
+│   │  Any OpenAI-    │  │  Local models  │           │
+│   │  compatible API │  │  (Ollama etc.) │           │
 │   │  blueprints     │   │  micro-fixes  │           │
 │   └───────┬───────┘   └───────┬────────┘           │
 │           └────────┬──────────┘                    │

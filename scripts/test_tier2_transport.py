@@ -246,16 +246,17 @@ def test_validate_html_should_pass():
 
 
 def test_from_env_defaults_to_openai_compatible():
-    """Default backend is OpenAI-compatible DeepSeek via OpenRouter."""
+    """Default backend is OpenAI-compatible with NO vendor hardcoded —
+    the operator must supply TIER2_MODEL/TIER2_BASE_URL (or config)."""
     import os as _os
-    saved = {k: _os.environ.get(k) for k in ("TIER2_PROVIDER", "OPENROUTER_API_KEY", "GEMINI_API_KEY")}
+    saved = {k: _os.environ.get(k) for k in ("TIER2_PROVIDER", "TIER2_MODEL", "TIER2_BASE_URL", "GEMINI_API_KEY")}
     try:
         for k in saved:
             _os.environ.pop(k, None)
         cfg = GeminiConfig.from_env()
         assert cfg.provider == "openai"
-        assert cfg.model == "deepseek/deepseek-v4-flash-0731"
-        assert "openrouter" in cfg.base_url
+        assert cfg.model == ""  # neutral: no vendor default baked in
+        assert cfg.base_url == ""  # operator configures the endpoint
     finally:
         for k, v in saved.items():
             if v is None:
@@ -276,7 +277,7 @@ def test_from_env_gemini_when_requested():
         assert cfg.provider == "gemini"
         assert cfg.model == "gemini-2.5-flash"
         assert "generativelanguage" in cfg.base_url
-        assert "deepseek" not in cfg.model
+        assert cfg.model == "gemini-2.5-flash"
     finally:
         for k, v in saved.items():
             if v is None:
@@ -293,7 +294,7 @@ def test_dispatch_routes_to_openai():
     try:
         gw._call_openai_compatible = lambda *a, **k: called.setdefault("openai", True) or "ok"
         gw._call_gemini_native = lambda *a, **k: called.setdefault("native", True) or "native"
-        cfg = GeminiConfig(api_key="test", provider="openai")
+        cfg = GeminiConfig(api_key="test", provider="openai", base_url="http://127.0.0.1:9/v1", model="test-model")
         _call_gemini(cfg, "hi")
         assert called.get("openai") is True
     finally:
@@ -308,7 +309,7 @@ def test_dispatch_routes_to_gemini_native():
     orig_native = gw._call_gemini_native
     try:
         gw._call_gemini_native = lambda *a, **k: called.setdefault("native", True) or "native"
-        cfg = GeminiConfig(api_key="test", provider="gemini")
+        cfg = GeminiConfig(api_key="test", provider="gemini", base_url="https://generativelanguage.googleapis.com/v1beta", model="gemini-2.5-flash")
         _call_gemini(cfg, "hi")
         assert called.get("native") is True
     finally:
@@ -345,7 +346,7 @@ def _with_fake_urlopen(response_json, fn):
 
 def test_openai_truncation_maps_to_error():
     """finish_reason=='length' raises TruncatedResponseError (OpenAI signal)."""
-    cfg = GeminiConfig(api_key="test", provider="openai")
+    cfg = GeminiConfig(api_key="test", provider="openai", base_url="http://127.0.0.1:9/v1", model="test-model")
     try:
         def call():
             return _call_openai_compatible(cfg, "gen code")
@@ -363,7 +364,7 @@ def test_openai_truncation_maps_to_error():
 
 def test_openai_json_mode_parses():
     """OpenAI transport parses JSON content responses."""
-    cfg = GeminiConfig(api_key="test", provider="openai")
+    cfg = GeminiConfig(api_key="test", provider="openai", base_url="http://127.0.0.1:9/v1", model="test-model")
     def call():
         return _call_openai_compatible(cfg, "gen json", json_mode=True)
     result = _with_fake_urlopen({
@@ -378,7 +379,7 @@ def test_openai_json_mode_parses():
 
 def test_openai_text_mode_returns_string():
     """OpenAI transport returns raw string for text (non-JSON) mode."""
-    cfg = GeminiConfig(api_key="test", provider="openai")
+    cfg = GeminiConfig(api_key="test", provider="openai", base_url="http://127.0.0.1:9/v1", model="test-model")
     def call():
         return _call_openai_compatible(cfg, "gen code", json_mode=False)
     result = _with_fake_urlopen({
@@ -392,7 +393,7 @@ def test_openai_text_mode_returns_string():
 
 def test_openai_error_response():
     """OpenAI transport returns error dict on API error."""
-    cfg = GeminiConfig(api_key="bad", provider="openai")
+    cfg = GeminiConfig(api_key="bad", provider="openai", base_url="http://127.0.0.1:9/v1", model="test-model")
     def call():
         return _call_openai_compatible(cfg, "hi", json_mode=False)
     result = _with_fake_urlopen({
@@ -404,7 +405,7 @@ def test_openai_error_response():
 
 def test_gemini_native_still_truncates():
     """Native transport still maps MAX_TOKENS to TruncatedResponseError."""
-    cfg = GeminiConfig(api_key="test", provider="gemini")
+    cfg = GeminiConfig(api_key="test", provider="gemini", base_url="https://generativelanguage.googleapis.com/v1beta", model="gemini-2.5-flash")
     try:
         def call():
             return _call_gemini_native(cfg, "gen code")

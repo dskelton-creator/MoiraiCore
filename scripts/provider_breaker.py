@@ -2,7 +2,7 @@
 
 Both Hagent (~/agent-os/scripts) and MoiraiCore (~/MoiraiCore/scripts) call the
 `hermes` CLI for all Tier 1 inference. When the upstream provider (e.g.
-OpenRouter) dies or a reasoning model stalls, every bridge call still burns its
+provider) dies or a reasoning model stalls, every bridge call still burns its
 full timeout (60–900s) before failing. This module fails fast instead:
 
   - After CONSECUTIVE_FAILURE_THRESHOLD provider-failure results in a row, the

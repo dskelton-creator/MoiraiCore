@@ -78,12 +78,12 @@ except ImportError:
 # The Tier 1 orchestration runs through the `hermes` CLI; pass -m explicitly
 # so it uses TIER1_MODEL instead of the CLI's config.yaml default.
 # Env-driven to mirror Tier 2's TIER2_MODEL pattern.
-TIER1_MODEL = os.environ.get("TIER1_MODEL", "deepseek/deepseek-v4-pro")
+TIER1_MODEL = os.environ.get("TIER1_MODEL", "")  # set via env/config; no vendor default
 def _tier1_model_args(reasoning_effort: "str | None" = None) -> list:
     """Hermes CLI args for the Tier 1 director model.
 
     reasoning_effort: optional level (none|minimal|low|medium|high|xhigh|max|
-    ultra) passed via --reasoning to tune DeepSeek V4 Pro's compute spend per
+    ultra) passed via --reasoning to tune the model's compute spend per
     task type. Omitted/None keeps the configured default.
     """
     args = ["-m", TIER1_MODEL]
