@@ -16,6 +16,7 @@ users can use a mix of either fully cloud models or local llm's to help maintain
 
 - **Mission Control dashboard** — a single-file SPA (`dashboard/`) that unifies agents, goals, kanban, vault, outputs, and reports.
 - **3-Tier Agent Pipeline** — a governed code-generation pipeline with a ScrumMaster (Tier 1), a provider-agnostic architect engine (Tier 2), and a local execution worker (Tier 3), gated by ScrumGate before anything merges to `src/`.
+- **Spec-Driven Development (SDD)** — every task carries a machine-checkable spec contract: `intent`, `constraints`, `acceptance_criteria`, `out_of_scope`. The brief injects the spec into every generator; the gate checks artifacts against the acceptance criteria; failures feed an explicit retry loop until the model fixes what was named. Contracts converge — the gate demonstrably turns a failing artifact into a passing one on retry.
 - **Provider-agnostic Tier 2** — bring your own model: any OpenAI-compatible endpoint by default, Gemini native as a built-in alternative. No vendor is hardcoded.
 - **Memory Vault** — markdown/SQLite-FTS5 knowledge graph agents read and write.
 - **Goal Engine + Kanban** — decompose goals into tasks, route them to agents, evaluate artifacts, and synthesize reports.
@@ -126,6 +127,23 @@ Google sign-in is available on the login screen whenever a Client ID is set.
 ```
 
 Direct writes to `src/` are blocked; all code goes through generate → evaluate → merge.
+
+## Spec-Driven Development (SDD)
+
+The merge gate isn't a style checker — it's anchored to a **spec contract** attached to every task:
+
+| Spec field | What it does |
+|------------|--------------|
+| `intent` | What the task is actually for — injected verbatim into every generator prompt |
+| `constraints` | Hard boundaries (stack, style, paths) the artifact must respect |
+| `acceptance_criteria` | Machine-checkable statements the gate verifies in the artifact |
+| `out_of_scope` | Explicit exclusions — scope creep fails the review |
+
+**The loop:** generators receive the spec brief → the gate extracts each acceptance criterion's salient tokens and checks coverage in the artifact → a failed artifact is **rejected with the exact named criterion** → the retry prompt includes what failed. Tasks auto-derive a minimal spec if the operator supplies none, and multi-file features can carry **shared contracts** (endpoint paths, units, field names) so independently generated files stay consistent.
+
+The result: a gate that *demonstrably converges* — a failing artifact becomes a passing one on retry, because the model is told precisely what to fix. Operator-supplied specs always win; `docs/spec-driven-sdd-plan.md` documents the design.
+
+See it live: the [60-second demo](#60-second-demo-the-merge-gate-that-says-no) above shows the gate refusing a lazy artifact and accepting its compliant retry.
 
 ## Repository Layout
 
