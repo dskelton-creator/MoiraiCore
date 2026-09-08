@@ -1,4 +1,4 @@
-# 🧠 MoiraiCore — Local-First AI Orchestration Platform
+# 🧠 MoiraiCore — Local-First AI Orchestration Platform - Spec Driven Development (SDD)
 
 **MoiraiCore** is a self-hosted, local-first agent orchestration platform. It turns scattered AI models and coding agents into a single governed workspace with a Mission Control dashboard, a memory vault, a goal engine, and a strict multi-tier code pipeline.
 
